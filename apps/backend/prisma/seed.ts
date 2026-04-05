@@ -1,8 +1,4 @@
-import {
-  PrismaClient,
-  UserRole,
-  Prisma,
-} from '@prisma/client';
+import { PrismaClient, UserRole, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -14,12 +10,13 @@ async function main() {
   const adminPassword = await bcrypt.hash('admin123', 10);
   await prisma.user.upsert({
     where: { email: 'admin@cardetailing.com' },
-    update: {},
+    update: { phone: '+1000000000' },
     create: {
       email: 'admin@cardetailing.com',
       passwordHash: adminPassword,
       firstName: 'Professional',
       lastName: 'Admin',
+      phone: '+1000000000',
       role: UserRole.ADMIN,
       isActive: true,
     },
@@ -29,20 +26,39 @@ async function main() {
   // 2. Create Staff
   const staffPassword = await bcrypt.hash('staff123', 10);
   const staffNames = [
-    { first: 'John', last: 'Doe', pos: 'Senior Detailer', rate: 25 },
-    { first: 'Jane', last: 'Smith', pos: 'Interior Specialist', rate: 22 },
-    { first: 'Mike', last: 'Johnson', pos: 'Junior Washer', rate: 18 },
+    {
+      first: 'John',
+      last: 'Doe',
+      pos: 'Senior Detailer',
+      rate: 25,
+      phone: '+1000000001',
+    },
+    {
+      first: 'Jane',
+      last: 'Smith',
+      pos: 'Interior Specialist',
+      rate: 22,
+      phone: '+1000000002',
+    },
+    {
+      first: 'Mike',
+      last: 'Johnson',
+      pos: 'Junior Washer',
+      rate: 18,
+      phone: '+1000000003',
+    },
   ];
 
   for (const s of staffNames) {
     const user = await prisma.user.upsert({
       where: { email: `${s.first.toLowerCase()}@cardetailing.com` },
-      update: {},
+      update: { phone: s.phone },
       create: {
         email: `${s.first.toLowerCase()}@cardetailing.com`,
         passwordHash: staffPassword,
         firstName: s.first,
         lastName: s.last,
+        phone: s.phone,
         role: UserRole.STAFF,
         isActive: true,
       },
@@ -60,6 +76,23 @@ async function main() {
     });
   }
   console.log('✅ Staff profiles created/verified');
+
+  // Customer seed for login testing
+  const customerPassword = await bcrypt.hash('customer123', 10);
+  await prisma.user.upsert({
+    where: { email: 'customer@example.com' },
+    update: { phone: '+1000000099' },
+    create: {
+      email: 'customer@example.com',
+      passwordHash: customerPassword,
+      firstName: 'Test',
+      lastName: 'Customer',
+      phone: '+1000000099',
+      role: UserRole.CUSTOMER,
+      isActive: true,
+    },
+  });
+  console.log('✅ Test customer created/verified');
 
   // 3. Create Services
   const services = [
