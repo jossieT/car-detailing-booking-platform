@@ -136,6 +136,9 @@ importers:
         specifier: 19.2.4
         version: 19.2.4(react@19.2.4)
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.18.0
+        version: 9.39.4
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.2.2
@@ -172,6 +175,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.20.0
+        version: 8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
 
   packages/shared:
     devDependencies:
