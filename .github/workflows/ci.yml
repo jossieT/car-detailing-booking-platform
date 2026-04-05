@@ -70,7 +70,7 @@ jobs:
         run: pnpm --filter backend exec prisma generate
 
       - name: Run Turbo Tasks (Lint, Test, Build)
-        run: pnpm exec turbo run lint test build
+        run: pnpm exec turbo run lint test build --force
         env:
           DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb?schema=public
           NODE_ENV: test
