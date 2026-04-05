@@ -1,0 +1,20 @@
+{
+  "name": "car-detailing-booking",
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}
