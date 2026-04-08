@@ -23,6 +23,9 @@ export class AuthService {
     try {
       const user = await this.usersService.findByEmailOrPhone(identifier);
       if (user && (await bcrypt.compare(password, user.passwordHash))) {
+        if (!user.isActive) {
+          return null; // User is deactivated/suspended
+        }
         // Remove password before returning user object
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { passwordHash: _passwordHash, ...result } = user;

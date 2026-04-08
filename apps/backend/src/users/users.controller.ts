@@ -100,6 +100,20 @@ export class UsersController {
     throw new ForbiddenException('You can only delete your own profile');
   }
 
+  @Patch(':id/activate')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async activate(@Param('id') id: string) {
+    return this.usersService.setActiveStatus(id, true);
+  }
+
+  @Patch(':id/deactivate')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async deactivate(@Param('id') id: string) {
+    return this.usersService.setActiveStatus(id, false);
+  }
+
   @Get('admin')
   @Roles(UserRole.ADMIN)
   adminOnly() {

@@ -153,4 +153,25 @@ export class UsersService {
       throw new NotFoundException(`User With ID ${id} not found ${error}`);
     }
   }
+
+  async setActiveStatus(id: string, isActive: boolean) {
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data: { isActive },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } catch (error) {
+      throw new NotFoundException(`User with id ${id} not found`);
+    }
+  }
 }
