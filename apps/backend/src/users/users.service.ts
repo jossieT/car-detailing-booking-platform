@@ -61,6 +61,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         phone: true,
+        role: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,

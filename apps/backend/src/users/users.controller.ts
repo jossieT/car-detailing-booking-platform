@@ -37,6 +37,15 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('profile')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  getProfile(
+    @Request() req: { user: { userId: string; phone: string; role: UserRole } },
+  ) {
+    const userId = req.user.userId;
+    return this.usersService.findOne(userId);
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   async findOne(
@@ -69,6 +78,15 @@ export class UsersController {
     );
   }
 
+  // @Get('profile')
+  // @UseGuards(AuthGuard('jwt'), RolesGuard)
+  // getProfile(
+  //   @Request() req: { user: { userId: string; phone: string; role: UserRole } },
+  // ) {
+  //   const userId = req.user.userId;
+  //   return this.usersService.findOne(userId);
+  // }
+
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   async remove(
@@ -80,15 +98,6 @@ export class UsersController {
       return this.usersService.remove(id);
     }
     throw new ForbiddenException('You can only delete your own profile');
-  }
-
-  @Get('profile')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  getProfile(
-    @Request() req: { user: { userId: string; phone: string; role: UserRole } },
-  ) {
-    const userId = req.user.userId;
-    return this.usersService.findOne(userId);
   }
 
   @Get('admin')

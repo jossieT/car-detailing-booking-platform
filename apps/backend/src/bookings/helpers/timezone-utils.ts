@@ -1,43 +1,60 @@
-/**
- * Timezone conversion utilities for business-specific time handling
- */
+﻿import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { BUSINESS_HOURS, CLOSED_DAYS } from '../bookings.constants';
 
-export function convertToTimezone(date: Date, timezone: string): Date {
-  // Convert date to the specified timezone
-  // Note: This is a basic implementation. For production, consider using a library like 'date-fns-tz'
-  const utcDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000));
-  const targetDate = new Date(utcDate.toLocaleString("en-US", {timeZone: timezone}));
-  return targetDate;
+const DEFAULT_TIMEZONE = 'UTC';
+
+function pad(value: number) {
+  return String(value).padStart(2, '0');
 }
 
-export function convertFromTimezone(date: Date, timezone: string): Date {
-  // Convert date from the specified timezone to UTC
-  // This is the inverse operation
-  const localDate = new Date(date.toLocaleString("en-US", {timeZone: timezone}));
-  const utcDate = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000));
-  return utcDate;
-}
-
-export function getBusinessWorkingHours(business: any, dayOfWeek: number): { start: string, end: string } | null {
-  if (!business.workingHours) {
-    return { start: '09:00', end: '18:00' }; // Default hours
+export function getBusinessWorkingHours(business: any, dayOfWeek: number): { start: string; end: string } {
+  if (!business?.workingHours) {
+    return { start: `${pad(BUSINESS_HOURS.START_HOUR)}:00`, end: `${pad(BUSINESS_HOURS.END_HOUR)}:00` };
   }
 
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const dayName = dayNames[dayOfWeek];
+  const hours = business.workingHours?.[dayName];
 
-  const hours = business.workingHours[dayName];
   if (!hours) {
-    return { start: '09:00', end: '18:00' }; // Default if no hours specified
+    return { start: `${pad(BUSINESS_HOURS.START_HOUR)}:00`, end: `${pad(BUSINESS_HOURS.END_HOUR)}:00` };
   }
 
   return {
-    start: hours.start || '09:00',
-    end: hours.end || '18:00'
+    start: hours.start || `${pad(BUSINESS_HOURS.START_HOUR)}:00`,
+    end: hours.end || `${pad(BUSINESS_HOURS.END_HOUR)}:00`,
   };
 }
 
 export function isBusinessClosed(business: any, dayOfWeek: number): boolean {
-  if (!business.closedDays) return false;
+  if (!business?.closedDays) {
+    return CLOSED_DAYS.includes(dayOfWeek);
+  }
   return business.closedDays.includes(dayOfWeek);
+}
+
+export function getBusinessDayRange(date: Date, business: any): { dayStart: Date; dayEnd: Date } {
+  const timezone = business?.timezone ?? DEFAULT_TIMEZONE;
+  const localDate = toZonedTime(date, timezone);
+  const dayOfWeek = localDate.getDay();
+
+  if (isBusinessClosed(business, dayOfWeek)) {
+    return { dayStart: new Date(0), dayEnd: new Date(0) };
+  }
+
+  const hours = getBusinessWorkingHours(business, dayOfWeek);
+  const [startHour, startMinute] = hours.start.split(':').map(Number);
+  const [endHour, endMinute] = hours.end.split(':').map(Number);
+
+  const year = localDate.getFullYear();
+  const month = localDate.getMonth() + 1;
+  const day = localDate.getDate();
+
+  const localStartString = `${year}-${pad(month)}-${pad(day)}T${pad(startHour)}:${pad(startMinute)}:00`;
+  const localEndString = `${year}-${pad(month)}-${pad(day)}T${pad(endHour)}:${pad(endMinute)}:00`;
+
+  return {
+    dayStart: fromZonedTime(localStartString, timezone),
+    dayEnd: fromZonedTime(localEndString, timezone),
+  };
 }

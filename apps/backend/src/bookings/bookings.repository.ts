@@ -31,62 +31,63 @@ export class BookingsRepository {
       }
 
       // 2. Get service details (capacity, duration)
-      const service = await tx.service.findUnique({
-        where: { id: data.serviceId, businessId: data.businessId }, // Add businessId filter
+      const service = await tx.service.findFirst({
+        where: { id: data.serviceId, businessId: data.businessId },
       });
       if (!service) {
         throw new NotFoundException('Service not found');
       }
 
-      // 3. Enforce capacity: count overlapping bookings for this service (excluding cancelled/no-show)
+      const bookingBufferMs = service.bufferMinutes * 60000;
+      const effectiveStart = new Date(data.startTime.getTime() - bookingBufferMs);
+      const effectiveEnd = new Date(data.endTime.getTime() + bookingBufferMs);
+
       const overlappingStatuses = [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS];
       const overlappingCount = await tx.booking.count({
         where: {
           serviceId: data.serviceId,
-          businessId: data.businessId, // Add businessId filter
+          businessId: data.businessId,
           status: { in: overlappingStatuses },
-          startTime: { lt: data.endTime },
-          endTime: { gt: data.startTime },
+          startTime: { lt: effectiveEnd },
+          endTime: { gt: effectiveStart },
         },
       });
       if (overlappingCount >= service.capacity) {
         throw new ConflictException('Service capacity exceeded for this time slot.');
       }
 
-      // 4. Assign staff (either provided or auto-assign)
       let assignedStaffId = data.staffId;
 
       if (assignedStaffId) {
-        // Check if the requested staff is free
         const staffOverlap = await tx.booking.findFirst({
           where: {
             staffId: assignedStaffId,
-            businessId: data.businessId, // Add businessId filter
+            businessId: data.businessId,
             status: { in: overlappingStatuses },
-            startTime: { lt: data.endTime },
-            endTime: { gt: data.startTime },
+            startTime: { lt: effectiveEnd },
+            endTime: { gt: effectiveStart },
           },
         });
         if (staffOverlap) {
           throw new ConflictException('The requested staff member is not available at that time.');
         }
       } else {
-        // Auto-assign: Find any active STAFF member without overlapping booking
         const availableStaff = await tx.user.findFirst({
           where: {
             role: UserRole.STAFF,
             isActive: true,
-            businessId: data.businessId, // Add businessId filter
+            businessId: data.businessId,
             NOT: {
               staffBookings: {
                 some: {
                   status: { in: overlappingStatuses },
-                  startTime: { lt: data.endTime },
-                  endTime: { gt: data.startTime },
+                  startTime: { lt: effectiveEnd },
+                  endTime: { gt: effectiveStart },
                 },
               },
             },
           },
+          select: { id: true },
         });
         if (!availableStaff) {
           throw new ConflictException('No staff members are available for the requested time slot.');
@@ -148,9 +149,10 @@ export class BookingsRepository {
     return this.prisma.booking.findMany({
       where: {
         serviceId,
-        businessId, // Add businessId filter
-        startTime: { gte: dayStart, lte: dayEnd },
+        businessId,
         status: { notIn: [BookingStatus.CANCELLED, BookingStatus.NO_SHOW] },
+        startTime: { lt: dayEnd },
+        endTime: { gt: dayStart },
       },
       select: { startTime: true, endTime: true },
     });
@@ -159,14 +161,24 @@ export class BookingsRepository {
   /**
    * Check if a specific staff member is free during a time range.
    */
-  async isStaffFree(staffId: string, startTime: Date, endTime: Date, businessId: string): Promise<boolean> {
+  async isStaffFree(
+    staffId: string,
+    startTime: Date,
+    endTime: Date,
+    businessId: string,
+    bufferMinutes = 0,
+  ): Promise<boolean> {
+    const bufferMs = bufferMinutes * 60000;
+    const effectiveStart = new Date(startTime.getTime() - bufferMs);
+    const effectiveEnd = new Date(endTime.getTime() + bufferMs);
+
     const overlap = await this.prisma.booking.findFirst({
       where: {
         staffId,
-        businessId, // Add businessId filter
+        businessId,
         status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
-        startTime: { lt: endTime },
-        endTime: { gt: startTime },
+        startTime: { lt: effectiveEnd },
+        endTime: { gt: effectiveStart },
       },
     });
     return !overlap;
@@ -175,33 +187,41 @@ export class BookingsRepository {
   /**
    * Find all staff members who are free during a time range.
    */
-  async findAvailableStaff(startTime: Date, endTime: Date, businessId: string): Promise<{ id: string }[]> {
-  const busyStaff = await this.prisma.booking.findMany({
-    where: {
-      businessId, // Add businessId filter
-      status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
-      startTime: { lt: endTime },
-      endTime: { gt: startTime },
-    },
-    select: { staffId: true },
-    distinct: ['staffId'],
-  });
-  
-  // Filter out any null staffId values
-  const busyStaffIds = busyStaff
-    .map(b => b.staffId)
-    .filter((id): id is string => id !== null);
-    
-  return this.prisma.user.findMany({
-    where: {
-      role: UserRole.STAFF,
-      isActive: true,
-      businessId, // Add businessId filter
-      ...(busyStaffIds.length > 0 ? { id: { notIn: busyStaffIds } } : {}),
-    },
-    select: { id: true },
-  });
-}
+  async findAvailableStaff(
+    startTime: Date,
+    endTime: Date,
+    businessId: string,
+    bufferMinutes = 0,
+  ): Promise<{ id: string }[]> {
+    const bufferMs = bufferMinutes * 60000;
+    const effectiveStart = new Date(startTime.getTime() - bufferMs);
+    const effectiveEnd = new Date(endTime.getTime() + bufferMs);
+
+    const busyStaff = await this.prisma.booking.findMany({
+      where: {
+        businessId,
+        status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
+        startTime: { lt: effectiveEnd },
+        endTime: { gt: effectiveStart },
+      },
+      select: { staffId: true },
+      distinct: ['staffId'],
+    });
+
+    const busyStaffIds = busyStaff
+      .map((b) => b.staffId)
+      .filter((id): id is string => id !== null);
+
+    return this.prisma.user.findMany({
+      where: {
+        role: UserRole.STAFF,
+        isActive: true,
+        businessId,
+        ...(busyStaffIds.length > 0 ? { id: { notIn: busyStaffIds } } : {}),
+      },
+      select: { id: true },
+    });
+  }
 
   async findActiveStaff() {
     return this.prisma.user.findMany({

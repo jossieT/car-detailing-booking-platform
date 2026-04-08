@@ -1,65 +1,69 @@
+import { toZonedTime } from 'date-fns-tz';
 import { BUSINESS_HOURS, CLOSED_DAYS } from '../bookings.constants';
-import { getBusinessWorkingHours, isBusinessClosed } from './timezone-utils';
+import { getBusinessDayRange, getBusinessWorkingHours, isBusinessClosed } from './timezone-utils';
 
 export interface TimeSlot {
   start: Date;
   end: Date;
-  available: boolean;   // will be set by service layer
+  available: boolean; // will be set by service layer
 }
 
 /**
- * Generate all possible start times for a service on a given day,
- * based on service duration and buffer. Does NOT check capacity or staff.
+ * Generate all candidate time slots for a service on a given day.
+ * This function returns per-interval slots within business hours.
  */
 export function generateServiceSlots(
   date: Date,
-  serviceDuration: number,   // minutes
-  bufferMinutes: number,     // minutes after each booking
-  business?: any,            // Business object with workingHours and closedDays
+  serviceDuration: number,
+  bufferMinutes: number,
+  business?: any,
 ): TimeSlot[] {
-  const dayOfWeek = date.getDay();
+  const timezone = business?.timezone ?? 'UTC';
+  const period = business ? getBusinessDayRange(date, business) : undefined;
 
-  // Check if business is closed
-  if (business && isBusinessClosed(business, dayOfWeek)) return [];
-  if (!business && CLOSED_DAYS.includes(dayOfWeek)) return [];
+  if (!business) {
+    const dayOfWeek = date.getDay();
+    if (CLOSED_DAYS.includes(dayOfWeek)) return [];
 
-  // Get working hours
-  let startHour: number, endHour: number;
+    const dayStart = new Date(date);
+    dayStart.setHours(BUSINESS_HOURS.START_HOUR, 0, 0, 0);
 
-  if (business) {
-    const hours = getBusinessWorkingHours(business, dayOfWeek);
-    if (!hours) return [];
+    const dayEnd = new Date(date);
+    dayEnd.setHours(BUSINESS_HOURS.END_HOUR, 0, 0, 0);
 
-    [startHour, endHour] = hours.start.split(':').map(Number);
-  } else {
-    // Fallback to constants
-    startHour = BUSINESS_HOURS.START_HOUR;
-    endHour = BUSINESS_HOURS.END_HOUR;
+    return buildSlots(dayStart, dayEnd, serviceDuration);
   }
 
-  // Working hours boundaries
-  const dayStart = new Date(date);
-  dayStart.setHours(startHour, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(endHour, 0, 0, 0);
+  if (!period || period.dayStart.getTime() === 0 || period.dayEnd.getTime() === 0) {
+    return [];
+  }
 
-  const stepMinutes = serviceDuration + bufferMinutes;
-  if (stepMinutes <= 0) return [];
+  const localStart = toZonedTime(period.dayStart, timezone);
+  const dayOfWeek = localStart.getDay();
+  if (isBusinessClosed(business, dayOfWeek)) return [];
+
+  const workingHours = getBusinessWorkingHours(business, dayOfWeek);
+  if (!workingHours) return [];
+
+  return buildSlots(period.dayStart, period.dayEnd, serviceDuration);
+}
+
+function buildSlots(dayStart: Date, dayEnd: Date, serviceDuration: number): TimeSlot[] {
+  const serviceDurationMs = serviceDuration * 60000;
+  const intervalMs = BUSINESS_HOURS.INTERVAL_MINUTES * 60000;
+
+  if (serviceDurationMs <= 0) return [];
 
   const slots: TimeSlot[] = [];
-  let currentStart = new Date(dayStart);
+  let current = new Date(dayStart);
 
-  while (true) {
-    const slotEnd = new Date(currentStart.getTime() + serviceDuration * 60000);
-    if (slotEnd > dayEnd) break;
-
+  while (current.getTime() + serviceDurationMs <= dayEnd.getTime()) {
     slots.push({
-      start: new Date(currentStart),
-      end: slotEnd,
-      available: true,   // will be refined later with capacity and staff checks
+      start: new Date(current),
+      end: new Date(current.getTime() + serviceDurationMs),
+      available: true,
     });
-
-    currentStart = new Date(currentStart.getTime() + stepMinutes * 60000);
+    current = new Date(current.getTime() + intervalMs);
   }
 
   return slots;
