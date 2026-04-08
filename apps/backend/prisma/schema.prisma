@@ -7,22 +7,301 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== ENUMS ====================
+model Business {
+  id           String    @id @default(cuid())
+  name         String
+  address      String?
+  phone        String?
+  email        String?
+  timezone     String    @default("UTC")
+  workingHours Json?
+  closedDays   Int[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  bookings     Booking[]
+  services     Service[]
+  users        User[]
+
+  @@map("businesses")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          UserRole       @default(CUSTOMER)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  businessId    String?
+  auditLogs     AuditLog[]
+  bookings      Booking[]      @relation("CustomerBookings")
+  staffBookings Booking[]      @relation("StaffBookings")
+  notifications Notification[]
+  staffProfile  StaffProfile?
+  business      Business?      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@index([businessId])
+  @@map("users")
+}
+
+model Service {
+  id            String            @id @default(cuid())
+  name          String            @unique
+  description   String?
+  duration      Int
+  basePrice     Decimal           @db.Decimal(10, 2)
+  isActive      Boolean           @default(true)
+  imageUrl      String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  parentId      String?           @map("parent_id")
+  bufferMinutes Int               @default(30)
+  capacity      Int               @default(1)
+  businessId    String?
+  bookings      Booking[]
+  materials     ServiceMaterial[]
+  business      Business?         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  parent        Service?          @relation("ServicePackage", fields: [parentId], references: [id])
+  children      Service[]         @relation("ServicePackage")
+
+  @@index([businessId])
+  @@map("services")
+}
+
+model ServiceMaterial {
+  id          String    @id @default(cuid())
+  serviceId   String    @map("service_id")
+  inventoryId String    @map("inventory_id")
+  quantity    Int       @default(1)
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  service     Service   @relation(fields: [serviceId], references: [id])
+
+  @@unique([serviceId, inventoryId])
+  @@map("service_materials")
+}
+
+model Inventory {
+  id            String            @id @default(cuid())
+  name          String
+  sku           String            @unique
+  category      String
+  quantity      Int               @default(0)
+  minThreshold  Int               @default(5)
+  unit          String
+  costPerUnit   Decimal           @db.Decimal(10, 2)
+  sellingPrice  Decimal?          @db.Decimal(10, 2)
+  location      String?
+  lastRestocked DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  inventoryLogs InventoryLog[]
+  materials     ServiceMaterial[]
+
+  @@map("inventory")
+}
+
+model InventoryLog {
+  id          String    @id @default(cuid())
+  inventoryId String    @map("inventory_id")
+  quantity    Int
+  reason      String
+  bookingId   String?   @map("booking_id")
+  performedBy String    @map("performed_by")
+  createdAt   DateTime  @default(now())
+  booking     Booking?  @relation(fields: [bookingId], references: [id])
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+
+  @@map("inventory_logs")
+}
+
+model Booking {
+  id             String                 @id @default(cuid())
+  customerId     String                 @map("customer_id")
+  staffId        String?                @map("staff_id")
+  serviceId      String                 @map("service_id")
+  startTime      DateTime               @map("start_time")
+  endTime        DateTime               @map("end_time")
+  status         BookingStatus          @default(PENDING)
+  totalPrice     Decimal                @db.Decimal(10, 2)
+  depositPaid    Decimal?               @db.Decimal(10, 2)
+  notes          String?
+  internalNotes  String?
+  vehicleInfo    Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  idempotencyKey String?                @unique @map("idempotency_key")
+  businessId     String?
+  statusHistory  BookingStatusHistory[]
+  business       Business?              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer       User                   @relation("CustomerBookings", fields: [customerId], references: [id])
+  service        Service                @relation(fields: [serviceId], references: [id])
+  staff          User?                  @relation("StaffBookings", fields: [staffId], references: [id])
+  inventoryLogs  InventoryLog[]
+  payments       Payment[]
+
+  @@index([startTime])
+  @@index([staffId, startTime])
+  @@index([customerId])
+  @@index([businessId])
+  @@map("bookings")
+}
+
+model BookingStatusHistory {
+  id        String        @id @default(cuid())
+  bookingId String        @map("booking_id")
+  oldStatus BookingStatus
+  newStatus BookingStatus
+  changedBy String        @map("changed_by")
+  reason    String?
+  changedAt DateTime      @default(now())
+  booking   Booking       @relation(fields: [bookingId], references: [id])
+
+  @@map("booking_status_history")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  bookingId     String        @map("booking_id")
+  amount        Decimal       @db.Decimal(10, 2)
+  method        String
+  transactionId String?       @unique
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  receiptUrl    String?
+  createdAt     DateTime      @default(now())
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+}
+
+model StaffProfile {
+  id              String      @id @default(cuid())
+  userId          String      @unique @map("user_id")
+  position        String
+  hourlyRate      Decimal     @db.Decimal(10, 2)
+  hireDate        DateTime    @default(now())
+  terminationDate DateTime?
+  bankAccount     String?
+  taxId           String?
+  payrolls        Payroll[]
+  user            User        @relation(fields: [userId], references: [id])
+  timesheets      Timesheet[]
+
+  @@map("staff_profiles")
+}
+
+model Timesheet {
+  id           String       @id @default(cuid())
+  staffId      String       @map("staff_id")
+  date         DateTime     @map("date")
+  clockIn      DateTime     @map("clock_in")
+  clockOut     DateTime?    @map("clock_out")
+  breakMinutes Int          @default(0) @map("break_minutes")
+  totalHours   Decimal?     @db.Decimal(5, 2)
+  notes        String?
+  approved     Boolean      @default(false)
+  approvedBy   String?      @map("approved_by")
+  staff        StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, date])
+  @@map("timesheets")
+}
+
+model Payroll {
+  id          String        @id @default(cuid())
+  staffId     String        @map("staff_id")
+  periodStart DateTime      @map("period_start")
+  periodEnd   DateTime      @map("period_end")
+  totalHours  Decimal       @db.Decimal(5, 2)
+  hourlyRate  Decimal       @db.Decimal(10, 2)
+  grossPay    Decimal       @db.Decimal(10, 2)
+  deductions  Decimal       @default(0) @db.Decimal(10, 2)
+  netPay      Decimal       @db.Decimal(10, 2)
+  status      PayrollStatus @default(DRAFT)
+  processedAt DateTime?
+  paidAt      DateTime?
+  notes       String?
+  staff       StaffProfile  @relation(fields: [staffId], references: [id])
+
+  @@map("payrolls")
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  description String
+  amount      Decimal         @db.Decimal(10, 2)
+  category    ExpenseCategory
+  expenseDate DateTime        @default(now()) @map("expense_date")
+  receiptUrl  String?
+  vendor      String?
+  paidBy      String          @map("paid_by")
+  createdAt   DateTime        @default(now())
+
+  @@map("expenses")
+}
+
+model DailySalesSummary {
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  totalBookings Int
+  totalRevenue  Decimal  @db.Decimal(10, 2)
+  totalExpenses Decimal  @db.Decimal(10, 2)
+  netProfit     Decimal  @db.Decimal(10, 2)
+  cashPayments  Decimal  @db.Decimal(10, 2)
+  cardPayments  Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+
+  @@map("daily_sales_summary")
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  type        String
+  title       String
+  content     String
+  isRead      Boolean   @default(false)
+  sentAt      DateTime  @default(now())
+  deliveredAt DateTime?
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  oldValues Json?
+  newValues Json?
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
 
 enum UserRole {
-  ADMIN        // Full system access
-  MANAGER      // Daily operations, reports
-  STAFF        // Detailer/worker
-  CUSTOMER     // Regular customer
+  ADMIN
+  MANAGER
+  STAFF
+  CUSTOMER
 }
 
 enum BookingStatus {
-  PENDING      // Awaiting admin confirmation
-  CONFIRMED    // Approved
-  IN_PROGRESS  // Being serviced
-  COMPLETED    // Done
-  CANCELLED    // Cancelled by customer or admin
-  NO_SHOW      // Customer didn't show
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
 }
 
 enum PaymentStatus {
@@ -33,8 +312,8 @@ enum PaymentStatus {
 }
 
 enum ExpenseCategory {
-  SUPPLIES      // Detailing products
-  EQUIPMENT     // Tools, machines
+  SUPPLIES
+  EQUIPMENT
   RENT
   UTILITIES
   SALARY
@@ -47,288 +326,4 @@ enum PayrollStatus {
   DRAFT
   PROCESSED
   PAID
-}
-
-// ==================== CORE TABLES ====================
-
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String    // Null for OAuth users
-  firstName     String
-  lastName      String
-  phone         String?
-  role          UserRole  @default(CUSTOMER)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Relations
-  bookings      Booking[]   @relation("CustomerBookings")
-  staffBookings Booking[]   @relation("StaffBookings")  // Bookings where this user is staff
-  staffProfile  StaffProfile?
-  auditLogs     AuditLog[]
-  notifications Notification[]
-  
-  @@map("users")
-}
-
-model Service {
-  id            String    @id @default(cuid())
-  name          String    @unique
-  description   String?
-  duration      Int       // minutes
-  basePrice     Decimal   @db.Decimal(10,2)
-  isActive      Boolean   @default(true)
-  imageUrl      String?
-  capacity      Int       @default(1)      // max concurrent bookings
-  bufferMinutes Int       @default(30)     // gap after each booking
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  parentId      String?   @map("parent_id")
-  parent        Service?  @relation("ServicePackage", fields: [parentId], references: [id])
-  children      Service[] @relation("ServicePackage")
-  materials     ServiceMaterial[]
-  bookings      Booking[]
-  @@map("services")
-}
-
-// Many-to-many: Service requires certain inventory items
-model ServiceMaterial {
-  id         String   @id @default(cuid())
-  serviceId  String   @map("service_id")
-  inventoryId String  @map("inventory_id")
-  quantity   Int      @default(1)  // How many units consumed per service
-  
-  service    Service  @relation(fields: [serviceId], references: [id])
-  inventory  Inventory @relation(fields: [inventoryId], references: [id])
-  
-  @@unique([serviceId, inventoryId])
-  @@map("service_materials")
-}
-
-model Inventory {
-  id          String    @id @default(cuid())
-  name        String
-  sku         String    @unique
-  category    String    // e.g., "Wax", "Soap", "Microfiber"
-  quantity    Int       @default(0)  // Current stock
-  minThreshold Int      @default(5)   // Alert when below this
-  unit        String    // e.g., "bottle", "piece", "liter"
-  costPerUnit Decimal   @db.Decimal(10,2)
-  sellingPrice Decimal? @db.Decimal(10,2) // If sold separately
-  location    String?   // Storage location
-  lastRestocked DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  // Relations
-  materials   ServiceMaterial[]
-  inventoryLogs InventoryLog[]
-  
-  @@map("inventory")
-}
-
-// Track inventory changes (restock, usage, adjustments)
-model InventoryLog {
-  id          String    @id @default(cuid())
-  inventoryId String    @map("inventory_id")
-  quantity    Int       // Positive = restock, Negative = usage
-  reason      String    // "RESTOCK", "SERVICE_USAGE", "WASTE", "ADJUSTMENT"
-  bookingId   String?   @map("booking_id") // If used in a booking
-  performedBy String    @map("performed_by") // User ID
-  createdAt   DateTime  @default(now())
-  
-  inventory   Inventory @relation(fields: [inventoryId], references: [id])
-  booking     Booking?  @relation(fields: [bookingId], references: [id])
-  
-  @@map("inventory_logs")
-}
-
-model Booking {
-  id            String        @id @default(cuid())
-  customerId    String        @map("customer_id")
-  staffId       String?       @map("staff_id")   // Assigned staff member
-  serviceId     String        @map("service_id")
-  startTime     DateTime      @map("start_time")
-  endTime       DateTime      @map("end_time")
-  status        BookingStatus @default(PENDING)
-  totalPrice    Decimal       @db.Decimal(10,2)
-  depositPaid   Decimal?      @db.Decimal(10,2) // Optional deposit
-  notes         String?       // Customer instructions
-  internalNotes String?       // Admin/staff notes
-  vehicleInfo   Json?         // {make, model, year, license, color}
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  
-  // For preventing double-booking
-  idempotencyKey String?      @unique @map("idempotency_key")
-  
-  // Relations
-  customer      User          @relation("CustomerBookings", fields: [customerId], references: [id])
-  staff         User?         @relation("StaffBookings", fields: [staffId], references: [id])
-  service       Service       @relation(fields: [serviceId], references: [id])
-  payments      Payment[]
-  inventoryLogs InventoryLog[]
-  statusHistory BookingStatusHistory[]
-  
-  @@index([startTime])
-  @@index([staffId, startTime])
-  @@index([customerId])
-  @@map("bookings")
-}
-
-// Track booking status changes for audit
-model BookingStatusHistory {
-  id          String        @id @default(cuid())
-  bookingId   String        @map("booking_id")
-  oldStatus   BookingStatus
-  newStatus   BookingStatus
-  changedBy   String        @map("changed_by") // User ID
-  reason      String?
-  changedAt   DateTime      @default(now())
-  
-  booking     Booking       @relation(fields: [bookingId], references: [id])
-  
-  @@map("booking_status_history")
-}
-
-model Payment {
-  id            String        @id @default(cuid())
-  bookingId     String        @map("booking_id")
-  amount        Decimal       @db.Decimal(10,2)
-  method        String        // "CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY"
-  transactionId String?       @unique // Stripe/MPesa reference
-  status        PaymentStatus @default(PENDING)
-  paidAt        DateTime?
-  receiptUrl    String?
-  createdAt     DateTime      @default(now())
-  
-  booking       Booking       @relation(fields: [bookingId], references: [id])
-  
-  @@map("payments")
-}
-
-// ==================== STAFF & PAYROLL ====================
-
-model StaffProfile {
-  id            String    @id @default(cuid())
-  userId        String    @unique @map("user_id")
-  position      String    // "Senior Detailer", "Junior", "Manager"
-  hourlyRate    Decimal   @db.Decimal(10,2)
-  hireDate      DateTime  @default(now())
-  terminationDate DateTime?
-  bankAccount   String?
-  taxId         String?
-  
-  user          User      @relation(fields: [userId], references: [id])
-  timesheets    Timesheet[]
-  payrolls      Payroll[]
-  
-  @@map("staff_profiles")
-}
-
-model Timesheet {
-  id          String    @id @default(cuid())
-  staffId     String    @map("staff_id")
-  date        DateTime  @map("date") // Date of work
-  clockIn     DateTime  @map("clock_in")
-  clockOut    DateTime? @map("clock_out")
-  breakMinutes Int      @default(0) @map("break_minutes")
-  totalHours  Decimal?  @db.Decimal(5,2) // Calculated
-  notes       String?
-  approved    Boolean   @default(false)
-  approvedBy  String?   @map("approved_by")
-  
-  staff       StaffProfile @relation(fields: [staffId], references: [id])
-  
-  @@unique([staffId, date])
-  @@map("timesheets")
-}
-
-model Payroll {
-  id          String        @id @default(cuid())
-  staffId     String        @map("staff_id")
-  periodStart DateTime      @map("period_start")
-  periodEnd   DateTime      @map("period_end")
-  totalHours  Decimal       @db.Decimal(5,2)
-  hourlyRate  Decimal       @db.Decimal(10,2)
-  grossPay    Decimal       @db.Decimal(10,2)
-  deductions  Decimal       @db.Decimal(10,2) @default(0)
-  netPay      Decimal       @db.Decimal(10,2)
-  status      PayrollStatus @default(DRAFT)
-  processedAt DateTime?
-  paidAt      DateTime?
-  notes       String?
-  
-  staff       StaffProfile @relation(fields: [staffId], references: [id])
-  
-  @@map("payrolls")
-}
-
-// ==================== FINANCIAL TRACKING ====================
-
-model Expense {
-  id          String         @id @default(cuid())
-  description String
-  amount      Decimal        @db.Decimal(10,2)
-  category    ExpenseCategory
-  expenseDate DateTime       @default(now()) @map("expense_date")
-  receiptUrl  String?
-  vendor      String?
-  paidBy      String         @map("paid_by") // User ID
-  createdAt   DateTime       @default(now())
-  
-  @@map("expenses")
-}
-
-// Daily sales summary (can be generated via cron job)
-model DailySalesSummary {
-  id            String    @id @default(cuid())
-  date          DateTime  @unique
-  totalBookings Int
-  totalRevenue  Decimal   @db.Decimal(10,2)
-  totalExpenses Decimal   @db.Decimal(10,2)
-  netProfit     Decimal   @db.Decimal(10,2)
-  cashPayments  Decimal   @db.Decimal(10,2)
-  cardPayments  Decimal   @db.Decimal(10,2)
-  createdAt     DateTime  @default(now())
-  
-  @@map("daily_sales_summary")
-}
-
-// ==================== COMMUNICATION & NOTIFICATIONS ====================
-
-model Notification {
-  id          String    @id @default(cuid())
-  userId      String    @map("user_id")
-  type        String    // "EMAIL", "SMS", "PUSH"
-  title       String
-  content     String
-  isRead      Boolean   @default(false)
-  sentAt      DateTime  @default(now())
-  deliveredAt DateTime?
-  
-  user        User      @relation(fields: [userId], references: [id])
-  
-  @@map("notifications")
-}
-
-// ==================== AUDIT & LOGGING ====================
-
-model AuditLog {
-  id          String    @id @default(cuid())
-  userId      String?   @map("user_id")
-  action      String    // "CREATE", "UPDATE", "DELETE", "LOGIN", "LOGOUT"
-  entity      String    // "Booking", "User", "Service", etc.
-  entityId    String?   @map("entity_id")
-  oldValues   Json?
-  newValues   Json?
-  ipAddress   String?   @map("ip_address")
-  userAgent   String?   @map("user_agent")
-  createdAt   DateTime  @default(now())
-  
-  user        User?     @relation(fields: [userId], references: [id])
-  
-  @@map("audit_logs")
 }

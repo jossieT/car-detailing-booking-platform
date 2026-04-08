@@ -4,6 +4,7 @@ import {
   IsString,
   MinLength,
   IsOptional,
+  IsUUID,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -28,4 +29,8 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   phone?: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  businessId: string;
 }

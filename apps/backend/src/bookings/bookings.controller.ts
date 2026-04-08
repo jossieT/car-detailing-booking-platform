@@ -28,10 +28,11 @@ export class BookingsController {
    * Retrieves available time slots for a given date and service.
    */
   @Get('slots')
-  getAvailableSlots(@Query() query: GetAvailableSlotsDto) {
+  getAvailableSlots(@Query() query: GetAvailableSlotsDto, @Request() req: any) {
     return this.bookingsService.getAvailableSlots(
       query.date,
       query.serviceId,
+      query.businessId, // Use businessId from query params
       query.staffId,
     );
   }

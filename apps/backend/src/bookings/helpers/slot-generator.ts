@@ -1,4 +1,5 @@
 import { BUSINESS_HOURS, CLOSED_DAYS } from '../bookings.constants';
+import { getBusinessWorkingHours, isBusinessClosed } from './timezone-utils';
 
 export interface TimeSlot {
   start: Date;
@@ -14,15 +15,33 @@ export function generateServiceSlots(
   date: Date,
   serviceDuration: number,   // minutes
   bufferMinutes: number,     // minutes after each booking
+  business?: any,            // Business object with workingHours and closedDays
 ): TimeSlot[] {
   const dayOfWeek = date.getDay();
-  if (CLOSED_DAYS.includes(dayOfWeek)) return [];
+
+  // Check if business is closed
+  if (business && isBusinessClosed(business, dayOfWeek)) return [];
+  if (!business && CLOSED_DAYS.includes(dayOfWeek)) return [];
+
+  // Get working hours
+  let startHour: number, endHour: number;
+
+  if (business) {
+    const hours = getBusinessWorkingHours(business, dayOfWeek);
+    if (!hours) return [];
+
+    [startHour, endHour] = hours.start.split(':').map(Number);
+  } else {
+    // Fallback to constants
+    startHour = BUSINESS_HOURS.START_HOUR;
+    endHour = BUSINESS_HOURS.END_HOUR;
+  }
 
   // Working hours boundaries
   const dayStart = new Date(date);
-  dayStart.setHours(BUSINESS_HOURS.START_HOUR, 0, 0, 0);
+  dayStart.setHours(startHour, 0, 0, 0);
   const dayEnd = new Date(date);
-  dayEnd.setHours(BUSINESS_HOURS.END_HOUR, 0, 0, 0);
+  dayEnd.setHours(endHour, 0, 0, 0);
 
   const stepMinutes = serviceDuration + bufferMinutes;
   if (stepMinutes <= 0) return [];

@@ -3,6 +3,7 @@ import { BookingsRepository } from './bookings.repository';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { generateServiceSlots } from './helpers/slot-generator';
+import { NotificationService } from './notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, BookingStatus, Prisma } from '@prisma/client';
 
@@ -11,21 +12,28 @@ export class BookingsService {
   constructor(
     private readonly repository: BookingsRepository,
     private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
   ) {}
 
-  async getAvailableSlots(dateString: string, serviceId: string, requestedStaffId?: string) {
+  async getAvailableSlots(dateString: string, serviceId: string, businessId: string, requestedStaffId?: string) {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) throw new BadRequestException('Invalid date');
 
     const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+      where: { id: serviceId, businessId }, // Add businessId filter
     });
     if (!service) throw new NotFoundException('Service not found');
 
+    // Get business for timezone and working hours
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+    });
+    if (!business) throw new NotFoundException('Business not found');
+
     const { duration, bufferMinutes, capacity } = service;
 
-    // Generate candidate slots (based on duration + buffer)
-    const candidateSlots = generateServiceSlots(date, duration, bufferMinutes);
+    // Generate candidate slots (based on duration + buffer) with business hours
+    const candidateSlots = generateServiceSlots(date, duration, bufferMinutes, business);
     if (candidateSlots.length === 0) return [];
 
     // Fetch all existing bookings for this service on the entire day (optimised)
@@ -34,7 +42,7 @@ export class BookingsService {
     const dayEnd = new Date(date);
     dayEnd.setHours(23, 59, 59, 999);
     const existingBookings = await this.repository.getOverlappingBookingsForService(
-      dayStart, dayEnd, serviceId
+      dayStart, dayEnd, serviceId, businessId // Add businessId
     );
 
     // For each candidate slot, determine availability in memory (avoid N+1)
@@ -49,12 +57,12 @@ export class BookingsService {
         let availableStaffId: string | undefined;
         if (available && requestedStaffId) {
           // Specific staff requested
-          const staffFree = await this.repository.isStaffFree(requestedStaffId, slot.start, slot.end);
+          const staffFree = await this.repository.isStaffFree(requestedStaffId, slot.start, slot.end, businessId); // Add businessId
           if (!staffFree) available = false;
           else availableStaffId = requestedStaffId;
         } else if (available && !requestedStaffId) {
           // Suggest any free staff
-          const freeStaff = await this.repository.findAvailableStaff(slot.start, slot.end);
+          const freeStaff = await this.repository.findAvailableStaff(slot.start, slot.end, businessId); // Add businessId
           if (freeStaff.length > 0) {
             availableStaffId = freeStaff[0].id;
           } else {
@@ -74,9 +82,9 @@ export class BookingsService {
     return slotsWithAvailability.filter(s => s.available);
   }
 
-  async createBooking(user: { userId: string, role: UserRole }, createBookingDto: CreateBookingDto) {
+  async createBooking(user: { userId: string, role: UserRole, businessId: string }, createBookingDto: CreateBookingDto) {
     const service = await this.prisma.service.findUnique({
-      where: { id: createBookingDto.serviceId },
+      where: { id: createBookingDto.serviceId, businessId: user.businessId }, // Add businessId filter
     });
     if (!service) throw new NotFoundException('Service not found');
 
@@ -93,17 +101,41 @@ export class BookingsService {
       throw new BadRequestException(`Booking duration must match service duration (${service.duration} mins)`);
     }
 
-    return this.repository.createBookingWithLock({
-      customerId: user.userId,
-      serviceId: service.id,
-      startTime,
-      endTime,
-      totalPrice: Number(service.basePrice),
-      staffId: createBookingDto.staffId,
-      notes: createBookingDto.notes,
-      vehicleInfo: createBookingDto.vehicleInfo,
-      idempotencyKey: createBookingDto.idempotencyKey,
-    });
+    // Add retry logic for concurrency protection
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const booking = await this.repository.createBookingWithLock({
+          customerId: user.userId,
+          serviceId: service.id,
+          businessId: user.businessId, // Add businessId
+          startTime,
+          endTime,
+          totalPrice: Number(service.basePrice),
+          staffId: createBookingDto.staffId,
+          notes: createBookingDto.notes,
+          vehicleInfo: createBookingDto.vehicleInfo,
+          idempotencyKey: createBookingDto.idempotencyKey,
+        });
+
+        // Trigger async notifications (fire-and-forget)
+        setImmediate(() => {
+          this.notificationService.sendBookingConfirmation(booking.id);
+        });
+
+        return booking;
+      } catch (error) {
+        lastError = error;
+        if (error.code === 'P2002' && attempt < maxRetries) { // Unique constraint violation
+          await new Promise(resolve => setTimeout(resolve, 100 * attempt)); // Exponential backoff
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
   }
 
   async findAll(user: { userId: string; role: string }) {

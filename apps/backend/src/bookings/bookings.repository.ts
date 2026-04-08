@@ -12,6 +12,7 @@ export class BookingsRepository {
   async createBookingWithLock(data: {
     customerId: string;
     serviceId: string;
+    businessId: string; // Add businessId
     startTime: Date;
     endTime: Date;
     totalPrice: number;
@@ -31,7 +32,7 @@ export class BookingsRepository {
 
       // 2. Get service details (capacity, duration)
       const service = await tx.service.findUnique({
-        where: { id: data.serviceId },
+        where: { id: data.serviceId, businessId: data.businessId }, // Add businessId filter
       });
       if (!service) {
         throw new NotFoundException('Service not found');
@@ -42,6 +43,7 @@ export class BookingsRepository {
       const overlappingCount = await tx.booking.count({
         where: {
           serviceId: data.serviceId,
+          businessId: data.businessId, // Add businessId filter
           status: { in: overlappingStatuses },
           startTime: { lt: data.endTime },
           endTime: { gt: data.startTime },
@@ -59,6 +61,7 @@ export class BookingsRepository {
         const staffOverlap = await tx.booking.findFirst({
           where: {
             staffId: assignedStaffId,
+            businessId: data.businessId, // Add businessId filter
             status: { in: overlappingStatuses },
             startTime: { lt: data.endTime },
             endTime: { gt: data.startTime },
@@ -73,6 +76,7 @@ export class BookingsRepository {
           where: {
             role: UserRole.STAFF,
             isActive: true,
+            businessId: data.businessId, // Add businessId filter
             NOT: {
               staffBookings: {
                 some: {
@@ -96,6 +100,7 @@ export class BookingsRepository {
           customerId: data.customerId,
           staffId: assignedStaffId,
           serviceId: data.serviceId,
+          businessId: data.businessId, // Add businessId
           startTime: data.startTime,
           endTime: data.endTime,
           totalPrice: new Prisma.Decimal(data.totalPrice),
@@ -139,10 +144,11 @@ export class BookingsRepository {
   /**
    * Get all overlapping bookings for a service on a given day (for slot generation).
    */
-  async getOverlappingBookingsForService(dayStart: Date, dayEnd: Date, serviceId: string) {
+  async getOverlappingBookingsForService(dayStart: Date, dayEnd: Date, serviceId: string, businessId: string) {
     return this.prisma.booking.findMany({
       where: {
         serviceId,
+        businessId, // Add businessId filter
         startTime: { gte: dayStart, lte: dayEnd },
         status: { notIn: [BookingStatus.CANCELLED, BookingStatus.NO_SHOW] },
       },
@@ -153,10 +159,11 @@ export class BookingsRepository {
   /**
    * Check if a specific staff member is free during a time range.
    */
-  async isStaffFree(staffId: string, startTime: Date, endTime: Date): Promise<boolean> {
+  async isStaffFree(staffId: string, startTime: Date, endTime: Date, businessId: string): Promise<boolean> {
     const overlap = await this.prisma.booking.findFirst({
       where: {
         staffId,
+        businessId, // Add businessId filter
         status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
         startTime: { lt: endTime },
         endTime: { gt: startTime },
@@ -168,9 +175,10 @@ export class BookingsRepository {
   /**
    * Find all staff members who are free during a time range.
    */
-  async findAvailableStaff(startTime: Date, endTime: Date): Promise<{ id: string }[]> {
+  async findAvailableStaff(startTime: Date, endTime: Date, businessId: string): Promise<{ id: string }[]> {
   const busyStaff = await this.prisma.booking.findMany({
     where: {
+      businessId, // Add businessId filter
       status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
       startTime: { lt: endTime },
       endTime: { gt: startTime },
@@ -188,6 +196,7 @@ export class BookingsRepository {
     where: {
       role: UserRole.STAFF,
       isActive: true,
+      businessId, // Add businessId filter
       ...(busyStaffIds.length > 0 ? { id: { notIn: busyStaffIds } } : {}),
     },
     select: { id: true },

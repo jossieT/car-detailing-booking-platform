@@ -14,3 +14,4 @@ turbo/
 node_modules/.cache/turbo
 
 car-detailing-api.postman_collection.json
+car-detailing-booking-api.postman_collection.json

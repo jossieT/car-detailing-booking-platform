@@ -26,6 +26,9 @@ export class CreateBookingDto {
   @IsUUID()
   serviceId: string;
 
+  @IsUUID()
+  businessId: string; // Add businessId
+
   @IsDateString()
   startTime: string;
 

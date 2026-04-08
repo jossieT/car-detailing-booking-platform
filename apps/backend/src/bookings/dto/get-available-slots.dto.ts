@@ -9,6 +9,10 @@ export class GetAvailableSlotsDto {
   @IsUUID()
   serviceId: string;
 
+  @IsNotEmpty()
+  @IsUUID()
+  businessId: string; // Add businessId
+
   @IsOptional()
   @IsUUID()
   staffId?: string;
