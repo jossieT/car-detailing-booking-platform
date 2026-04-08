@@ -5,7 +5,7 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 
 type AuthenticatedUser = Omit<
-  Awaited<ReturnType<UsersService['findByPhone']>>,
+  Awaited<ReturnType<UsersService['findByEmailOrPhone']>>,
   'passwordHash'
 >;
 
@@ -17,26 +17,33 @@ export class AuthService {
   ) {}
 
   async validateUser(
-    phone: string,
+    identifier: string,
     password: string,
   ): Promise<AuthenticatedUser | null> {
-    const user = await this.usersService.findByPhone(phone);
-    if (user && (await bcrypt.compare(password, user.passwordHash))) {
-      // Remove password before returning user object
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { passwordHash: _passwordHash, ...result } = user;
-      return result;
+    try {
+      const user = await this.usersService.findByEmailOrPhone(identifier);
+      if (user && (await bcrypt.compare(password, user.passwordHash))) {
+        // Remove password before returning user object
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { passwordHash: _passwordHash, ...result } = user;
+        return result;
+      }
+    } catch {
+      return null;
     }
     return null;
   }
 
   async login(loginDto: LoginDto) {
-    const { phone, password } = loginDto;
-    const user = await this.validateUser(phone, password);
+    const identifier = loginDto.email || loginDto.phone;
+    if (!identifier) {
+      throw new UnauthorizedException('Email or phone is required');
+    }
+    const user = await this.validateUser(identifier, loginDto.password);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const payload = { sub: user.id, phone, role: user.role };
+    const payload = { sub: user.id, email: user.email, role: user.role };
     const access_token: string = this.jwtService.sign(payload);
     return {
       access_token,
@@ -44,3 +51,4 @@ export class AuthService {
     };
   }
 }
+

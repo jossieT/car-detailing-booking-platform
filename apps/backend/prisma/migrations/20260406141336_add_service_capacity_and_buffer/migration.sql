@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "services" ADD COLUMN     "bufferMinutes" INTEGER NOT NULL DEFAULT 30,
+ADD COLUMN     "capacity" INTEGER NOT NULL DEFAULT 1;

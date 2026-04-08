@@ -12,3 +12,5 @@ turbo/
 # Turborepo
 .turbo
 node_modules/.cache/turbo
+
+car-detailing-api.postman_collection.json

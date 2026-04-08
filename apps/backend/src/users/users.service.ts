@@ -75,7 +75,7 @@ export class UsersService {
       where: { phone },
       select: {
         id: true,
-        email: true,
+        email: true, // Needed for JWT payload parity
         passwordHash: true,
         role: true,
         isActive: true,
@@ -84,6 +84,30 @@ export class UsersService {
 
     if (!user) {
       throw new NotFoundException(`User with phone ${phone} not found`);
+    }
+    return user;
+  }
+
+  async findByEmailOrPhone(identifier: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier },
+          { phone: identifier }
+        ]
+      },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        passwordHash: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User not found`);
     }
     return user;
   }
