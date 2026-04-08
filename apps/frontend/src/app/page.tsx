@@ -1,19 +1,18 @@
-import { Booking } from '@car-detailing/shared';
+import Link from 'next/link';
 
 export default function Home() {
-  const sampleBooking: Booking = {
-    id: '1',
-    startTime: new Date(),
-    endTime: new Date(),
-    status: 'pending',
-    customerId: 'cust_123',
-    serviceId: 'svc_456',
-    createdAt: new Date(),
-  };
   return (
     <main className="p-8">
-      <h1>Car Detailing Booking</h1>
-      <pre>{JSON.stringify(sampleBooking, null, 2)}</pre>
+      <h1 className="text-3xl font-bold mb-4">Car Detailing Booking Platform</h1>
+      <p className="mb-4">Welcome! Please login to book a service.</p>
+      <div className="space-x-4">
+        <Link href="/login" className="bg-blue-500 text-white px-4 py-2 rounded">
+          Login
+        </Link>
+        <Link href="/bookings" className="bg-green-500 text-white px-4 py-2 rounded">
+          Book a Service
+        </Link>
+      </div>
     </main>
   );
 }
