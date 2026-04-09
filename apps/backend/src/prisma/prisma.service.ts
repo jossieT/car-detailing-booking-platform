@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
 export class PrismaService
@@ -14,8 +15,8 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    // Prisma 6 automatically reads DATABASE_URL from environment
-    super();
+    const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+    super({ adapter });
     this.logger.log(`Using DATABASE_URL: ${process.env.DATABASE_URL}`);
   }
 
