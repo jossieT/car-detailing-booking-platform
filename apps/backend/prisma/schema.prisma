@@ -43,9 +43,21 @@ model User {
   notifications Notification[]
   staffProfile  StaffProfile?
   business      Business?      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  refreshTokens RefreshToken[]
 
   @@index([businessId])
   @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
 }
 
 model Service {
