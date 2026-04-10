@@ -11,6 +11,12 @@ async function bootstrap() {
     defaultVersion: '1',
   });
 
+  app.enableCors({
+  origin: 'http://localhost:3000', // Allow only your Next.js frontend
+  methods: 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+  credentials: true, // Include cookies, authorization headers
+});
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap().catch((err) => {
