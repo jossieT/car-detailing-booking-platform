@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { WorkingHourDto } from './dto/set-working-hours.dto';
+import { AssignSkillsDto } from './dto/assign-skills.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -45,6 +47,8 @@ export class UsersService {
         firstName: true,
         lastName: true,
         phone: true,
+        role: true,
+        skills: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -174,4 +178,44 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
   }
+
+async assignSkills(userId: string, serviceIds: string[]) {
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    include: { skills: true },
+  });
+  if (!user) throw new NotFoundException('User not found');
+
+  // Connect services (many-to-many)
+  return this.prisma.user.update({
+    where: { id: userId },
+    data: {
+      skills: {
+        set: serviceIds.map(id => ({ id })),
+      },
+    },
+    include: { skills: true },
+  });
+}
+
+async getWorkingHours(userId: string) {
+  return this.prisma.workingHour.findMany({
+    where: { staffId: userId },
+    orderBy: { dayOfWeek: 'asc' },
+  });
+}
+
+async setWorkingHours(userId: string, hours: WorkingHourDto[]) {
+  // Delete existing, then create new
+  await this.prisma.workingHour.deleteMany({ where: { staffId: userId } });
+  const data = hours.map(h => ({
+    staffId: userId,
+    dayOfWeek: h.dayOfWeek,
+    startTime: h.startTime,
+    endTime: h.endTime,
+    isDayOff: h.isDayOff ?? false,
+  }));
+  await this.prisma.workingHour.createMany({ data });
+  return this.getWorkingHours(userId);
+}
 }

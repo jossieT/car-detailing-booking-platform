@@ -17,6 +17,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { AssignSkillsDto } from './dto/assign-skills.dto';
+import { SetWorkingHoursDto, WorkingHourDto } from './dto/set-working-hours.dto';
 
 @Controller('users')
 //@UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -112,6 +114,24 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   async deactivate(@Param('id') id: string) {
     return this.usersService.setActiveStatus(id, false);
+  }
+
+  @Post(':id/skills')
+  @Roles(UserRole.ADMIN)
+  assignSkills(@Param('id') id: string, @Body() dto: AssignSkillsDto) {
+    return this.usersService.assignSkills(id, dto.serviceIds);
+  }
+
+  @Get(':id/working-hours')
+  @Roles(UserRole.ADMIN)
+  getWorkingHours(@Param('id') id: string) {
+    return this.usersService.getWorkingHours(id);
+  }
+
+  @Patch(':id/working-hours')
+  @Roles(UserRole.ADMIN)
+  setWorkingHours(@Param('id') id: string, @Body() dto: SetWorkingHoursDto) {
+    return this.usersService.setWorkingHours(id, dto.hours);
   }
 
   @Get('admin')

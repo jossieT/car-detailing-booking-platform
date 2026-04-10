@@ -42,11 +42,27 @@ model User {
   staffBookings Booking[]      @relation("StaffBookings")
   notifications Notification[]
   staffProfile  StaffProfile?
+  skills           Service[]        @relation("StaffSkills")
+  workingHours     WorkingHour[]
   business      Business?      @relation(fields: [businessId], references: [id], onDelete: Restrict)
   refreshTokens RefreshToken[]
 
   @@index([businessId])
   @@map("users")
+}
+
+model WorkingHour {
+  id         String   @id @default(cuid())
+  staffId    String
+  staff      User     @relation(fields: [staffId], references: [id])
+  dayOfWeek  Int      // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime  String   // "09:00"
+  endTime    String   // "17:00"
+  isDayOff   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([staffId, dayOfWeek])
 }
 
 model RefreshToken {
@@ -79,6 +95,7 @@ model Service {
   business      Business?         @relation(fields: [businessId], references: [id], onDelete: Restrict)
   parent        Service?          @relation("ServicePackage", fields: [parentId], references: [id])
   children      Service[]         @relation("ServicePackage")
+  assignedStaff    User[]           @relation("StaffSkills")
 
   @@index([businessId])
   @@map("services")
