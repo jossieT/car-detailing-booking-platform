@@ -1,34 +1,56 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface Booking {
   id: string;
-  customerName: string;
-  customerEmail?: string;
-  serviceName: string;
+  customerId: string;
+  staffId: string;
   serviceId: string;
-  date: string;
-  time: string;
   startTime: string;
-  endTime?: string;
+  endTime: string;
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-  amount: number;
-  vehicleInfo?: {
+  totalPrice: string;
+  depositPaid: string | null;
+  notes: string | null;
+  internalNotes: string | null;
+  vehicleInfo: {
     make: string;
     model: string;
-    year: string;
+    year: number;
     licensePlate: string;
     color: string;
   };
-  notes?: string;
   createdAt: string;
+  updatedAt: string;
+  idempotencyKey: string;
+  businessId: string;
+  service: {
+    id: string;
+    name: string;
+    description: string;
+    duration: number;
+    basePrice: string;
+    isActive: boolean;
+  };
+  staff: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+  customer: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
 }
 
 interface Service {
   id: string;
   name: string;
-  price: number;
+  basePrice: string | number;
   duration: number;
 }
 
@@ -62,9 +84,12 @@ export default function ManageBookingsPage() {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
-  // Fetch bookings and services on mount
+  // Fetch bookings whenever filters change
   useEffect(() => {
     fetchBookings();
+  }, [filters]);
+
+  useEffect(() => {
     fetchServices();
   }, []);
 
@@ -78,7 +103,7 @@ export default function ManageBookingsPage() {
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
       if (filters.endDate) queryParams.append('endDate', filters.endDate);
 
-      const res = await fetch(`${API_BASE}/admin/bookings?${queryParams}`, {
+      const res = await fetch(`${API_BASE}/bookings?${queryParams}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch bookings');
@@ -135,15 +160,18 @@ export default function ManageBookingsPage() {
 
   const openEditModal = (booking: Booking) => {
     setEditingBooking(booking);
+    const startDate = new Date(booking.startTime);
+    const dateStr = startDate.toISOString().split('T')[0];
+    const timeStr = startDate.toTimeString().slice(0, 5);
     setFormData({
-      customerName: booking.customerName,
-      customerEmail: booking.customerEmail || '',
+      customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
+      customerEmail: booking.customer.email,
       serviceId: booking.serviceId,
-      date: booking.date,
-      time: booking.time,
+      date: dateStr,
+      time: timeStr,
       vehicleMake: booking.vehicleInfo?.make || '',
       vehicleModel: booking.vehicleInfo?.model || '',
-      vehicleYear: booking.vehicleInfo?.year || '',
+      vehicleYear: booking.vehicleInfo?.year?.toString() || '',
       vehicleLicensePlate: booking.vehicleInfo?.licensePlate || '',
       vehicleColor: booking.vehicleInfo?.color || '',
       notes: booking.notes || '',
@@ -155,16 +183,16 @@ export default function ManageBookingsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('accessToken');
+    const startTime = new Date(`${formData.date}T${formData.time}:00.000Z`).toISOString();
     const payload = {
       customerName: formData.customerName,
       customerEmail: formData.customerEmail || undefined,
       serviceId: formData.serviceId,
-      date: formData.date,
-      time: formData.time,
+      startTime,
       vehicleInfo: {
         make: formData.vehicleMake,
         model: formData.vehicleModel,
-        year: formData.vehicleYear,
+        year: parseInt(formData.vehicleYear) || 0,
         licensePlate: formData.vehicleLicensePlate,
         color: formData.vehicleColor,
       },
@@ -247,9 +275,18 @@ export default function ManageBookingsPage() {
     return styles[status] || 'bg-gray-500/20 text-gray-300 border-gray-500/30';
   };
 
+  const formatDate = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleDateString();
+  };
+
+  const formatTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header & Actions */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">Manage Bookings</h2>
         <button
@@ -260,49 +297,59 @@ export default function ManageBookingsPage() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Filters - auto-submit on change, with labels */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <input
-            type="text"
-            placeholder="Customer name"
-            value={filters.customerName}
-            onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
-            className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500"
-          />
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-          >
-            <option value="">All Status</option>
-            <option value="PENDING">Pending</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-          <input
-            type="date"
-            placeholder="Start date"
-            value={filters.startDate}
-            onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-            className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-          />
-          <input
-            type="date"
-            placeholder="End date"
-            value={filters.endDate}
-            onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-            className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-          />
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={fetchBookings}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-          >
-            Apply Filters
-          </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Customer Name</label>
+            <input
+              type="text"
+              placeholder="Search customer..."
+              value={filters.customerName}
+              onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Status</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
+            >
+              <option value="">All Status</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">From Date</label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">To Date</label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={() => setFilters({ status: '', customerName: '', startDate: '', endDate: '' })}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition text-sm"
+            >
+              Clear Filters
+            </button>
+          </div>
         </div>
       </div>
 
@@ -329,11 +376,23 @@ export default function ManageBookingsPage() {
               <tbody className="divide-y divide-white/5">
                 {bookings.map((booking) => (
                   <tr key={booking.id} className="hover:bg-white/5 transition">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{booking.customerName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{booking.serviceName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{booking.date}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{booking.time}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">${booking.amount}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <Link href={`/dashboard/bookings/${booking.id}`} className="text-white hover:text-purple-400 transition">
+                        {booking.customer.firstName} {booking.customer.lastName}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                      {booking.service.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                      {formatDate(booking.startTime)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                      {formatTime(booking.startTime)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                      ${parseFloat(booking.totalPrice).toFixed(2)}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <select
                         value={booking.status}
@@ -368,16 +427,7 @@ export default function ManageBookingsPage() {
         </div>
       )}
 
-      {/* Message Toast */}
-      {message.text && (
-        <div className={`fixed bottom-4 right-4 p-3 rounded-lg ${
-          message.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        } text-white shadow-lg`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Add/Edit Modal */}
+      {/* Modal and Toast remain unchanged */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10">
@@ -411,7 +461,7 @@ export default function ManageBookingsPage() {
                     <option value="">Select Service</option>
                     {services.map((svc) => (
                       <option key={svc.id} value={svc.id}>
-                        {svc.name} - ${svc.price}
+                        {svc.name} - ${typeof svc.basePrice === 'string' ? parseFloat(svc.basePrice).toFixed(2) : svc.basePrice}
                       </option>
                     ))}
                   </select>
@@ -502,6 +552,14 @@ export default function ManageBookingsPage() {
               </form>
             </div>
           </div>
+        </div>
+      )}
+
+      {message.text && (
+        <div className={`fixed bottom-4 right-4 p-3 rounded-lg ${
+          message.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        } text-white shadow-lg z-50`}>
+          {message.text}
         </div>
       )}
     </div>

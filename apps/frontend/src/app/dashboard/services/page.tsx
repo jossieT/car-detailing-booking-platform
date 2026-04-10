@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Pencil, Trash2, Eye, Plus } from 'lucide-react';
+import { Pencil, Trash2, Eye, Plus, Search, X } from 'lucide-react';
 
 interface Service {
   id: string;
@@ -22,15 +22,25 @@ interface Service {
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
+  const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', type: 'success' });
-  const router = useRouter();
+  const [filters, setFilters] = useState({
+    name: '',
+    minPrice: '',
+    maxPrice: '',
+  });
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
   useEffect(() => {
     fetchServices();
   }, []);
+
+  // Apply filters whenever services or filters change
+  useEffect(() => {
+    applyFilters();
+  }, [services, filters]);
 
   const fetchServices = async () => {
     setLoading(true);
@@ -47,6 +57,45 @@ export default function ServicesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...services];
+
+    // Filter by name (case-insensitive)
+    if (filters.name.trim()) {
+      filtered = filtered.filter(service =>
+        service.name.toLowerCase().includes(filters.name.toLowerCase())
+      );
+    }
+
+    // Filter by min price
+    if (filters.minPrice) {
+      const min = parseFloat(filters.minPrice);
+      if (!isNaN(min)) {
+        filtered = filtered.filter(service => {
+          const price = typeof service.basePrice === 'string' ? parseFloat(service.basePrice) : service.basePrice;
+          return price >= min;
+        });
+      }
+    }
+
+    // Filter by max price
+    if (filters.maxPrice) {
+      const max = parseFloat(filters.maxPrice);
+      if (!isNaN(max)) {
+        filtered = filtered.filter(service => {
+          const price = typeof service.basePrice === 'string' ? parseFloat(service.basePrice) : service.basePrice;
+          return price <= max;
+        });
+      }
+    }
+
+    setFilteredServices(filtered);
+  };
+
+  const clearFilters = () => {
+    setFilters({ name: '', minPrice: '', maxPrice: '' });
   };
 
   const showMessage = (text: string, type: 'success' | 'error') => {
@@ -88,11 +137,72 @@ export default function ServicesPage() {
         </Link>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Service Name</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={filters.name}
+                onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+                className="w-full pl-9 pr-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Min Price ($)</label>
+            <input
+              type="number"
+              placeholder="0"
+              min="0"
+              step="1"
+              value={filters.minPrice}
+              onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Max Price ($)</label>
+            <input
+              type="number"
+              placeholder="Any"
+              min="0"
+              step="1"
+              value={filters.maxPrice}
+              onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition text-sm flex items-center gap-2"
+            >
+              <X size={16} /> Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Services Table */}
       {loading ? (
         <div className="text-center text-white py-12">Loading services...</div>
-      ) : services.length === 0 ? (
-        <div className="text-center text-slate-400 py-12">No services found. Create your first service.</div>
+      ) : filteredServices.length === 0 ? (
+        <div className="text-center text-slate-400 py-12">
+          No services match your filters.
+          {services.length > 0 && (
+            <button
+              onClick={clearFilters}
+              className="ml-2 text-purple-400 hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       ) : (
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
@@ -107,7 +217,7 @@ export default function ServicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {services.map((service) => (
+                {filteredServices.map((service) => (
                   <tr key={service.id} className="hover:bg-white/5 transition">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Link
