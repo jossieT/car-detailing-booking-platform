@@ -48,6 +48,8 @@ export default function DashboardPage() {
     if (!mounted) return;
 
     const accessToken = localStorage.getItem('accessToken');
+    if (accessToken) {
+    }
     if (!accessToken) {
       router.push('/login');
       return;

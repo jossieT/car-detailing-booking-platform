@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -23,13 +24,13 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+        const response = await apiFetch('/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password: password.trim() }),
-      });
+      }, true);
 
       const data = await response.json();
+      console.log('Login API response:', data);
 
       if (!response.ok) throw new Error(data.message || 'Login failed');
 
@@ -37,6 +38,11 @@ export default function LoginPage() {
       localStorage.setItem('refreshToken', data.refresh_token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
+      console.log('Stored accessToken:', localStorage.getItem('accessToken'));
+      console.log('Stored refreshToken:', localStorage.getItem('refreshToken'));
+      console.log('Stored user:', localStorage.getItem('user'));
+
+      //window.location.href = '/dashboard';
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

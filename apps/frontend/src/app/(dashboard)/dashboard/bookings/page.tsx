@@ -2,63 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
-
-interface Booking {
-  id: string;
-  customerId: string;
-  staffId: string;
-  serviceId: string;
-  startTime: string;
-  endTime: string;
-  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-  totalPrice: string;
-  depositPaid: string | null;
-  notes: string | null;
-  internalNotes: string | null;
-  vehicleInfo: {
-    make: string;
-    model: string;
-    year: number;
-    licensePlate: string;
-    color: string;
-  };
-  createdAt: string;
-  updatedAt: string;
-  idempotencyKey: string;
-  businessId: string;
-  service: {
-    id: string;
-    name: string;
-    description: string;
-    duration: number;
-    basePrice: string;
-    isActive: boolean;
-  };
-  staff: {
-    id: string;
-    firstName: string;
-    lastName: string;
-  };
-  customer: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
-}
-
-interface Service {
-  id: string;
-  name: string;
-  basePrice: string | number;
-  duration: number;
-}
-
-interface Business {
-  id: string;
-  name: string;
-}
+import { bookingService } from '@/services/booking.service';
+import { serviceService } from '@/services/service.service';
+import { businessService } from '@/services/business.service';
+import type { Booking } from '@/types/booking';
+import type { Service } from '@/types/service';
+import type { Business } from '@/types/business';
 
 interface Slot {
   start: string;
@@ -67,7 +16,7 @@ interface Slot {
   staffId: string;
 }
 
-export default function ManageBookingsPage() {
+export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -99,36 +48,25 @@ export default function ManageBookingsPage() {
   });
   const [message, setMessage] = useState({ text: '', type: 'success' });
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
-
   useEffect(() => {
-    fetchBookings();
-    fetchServices();
-    fetchBusinesses();
+    fetchAll();
   }, []);
 
   useEffect(() => {
     fetchBookings();
   }, [filters]);
 
-  const fetchBookings = async () => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const queryParams = new URLSearchParams();
-      if (filters.status) queryParams.append('status', filters.status);
-      if (filters.customerName) queryParams.append('customerName', filters.customerName);
-      if (filters.startDate) queryParams.append('startDate', filters.startDate);
-      if (filters.endDate) queryParams.append('endDate', filters.endDate);
-
-    //   const res = await fetch(`${API_BASE}/bookings?${queryParams}`, {
-    //     headers: { Authorization: `Bearer ${token}` },
-    //   });
-
-      const res = await apiFetch(`/bookings?${queryParams}`);
-      if (!res.ok) throw new Error('Failed to fetch bookings');
-      const data = await res.json();
-      setBookings(data);
+      const [servicesData, businessesData] = await Promise.all([
+        serviceService.getAll(),
+        businessService.getAll(),
+      ]);
+      setServices(servicesData);
+      setBusinesses(businessesData);
+      if (businessesData.length === 1) setSelectedBusinessId(businessesData[0].id);
+      if (servicesData.length > 0) setSelectedServiceId(servicesData[0].id);
     } catch (err: any) {
       showMessage(err.message, 'error');
     } finally {
@@ -136,33 +74,20 @@ export default function ManageBookingsPage() {
     }
   };
 
-  const fetchServices = async () => {
+  const fetchBookings = async () => {
+    setLoading(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/services`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setServices(data);
-      if (data.length > 0) setSelectedServiceId(data[0].id);
-    } catch (err) {
-      console.error('Failed to fetch services');
-    }
-  };
-
-  const fetchBusinesses = async () => {
-    try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/businesses`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setBusinesses(data);
-      if (data.length === 1) setSelectedBusinessId(data[0].id);
-    } catch (err) {
-      console.error('Failed to fetch businesses');
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.customerName) params.append('customerName', filters.customerName);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      const data = await bookingService.getAll(params);
+      setBookings(data);
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -173,13 +98,7 @@ export default function ManageBookingsPage() {
     }
     setFetchingSlots(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(
-        `${API_BASE}/bookings/slots?date=${selectedDate}&serviceId=${selectedServiceId}&businessId=${selectedBusinessId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error('Failed to fetch slots');
-      const data = await res.json();
+      const data = await bookingService.getSlots(selectedDate, selectedServiceId, selectedBusinessId);
       setSlots(data);
       setSelectedSlot('');
     } catch (err: any) {
@@ -248,7 +167,6 @@ export default function ManageBookingsPage() {
       showMessage('Please select a time slot', 'error');
       return;
     }
-    const token = localStorage.getItem('accessToken');
     const payload = {
       customerName: formData.customerName,
       customerEmail: formData.customerEmail || undefined,
@@ -265,29 +183,12 @@ export default function ManageBookingsPage() {
       notes: formData.notes,
       status: formData.status,
     };
-
     try {
-      let res;
       if (editingBooking) {
-        res = await fetch(`${API_BASE}/admin/bookings/${editingBooking.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
+        await bookingService.update(editingBooking.id, payload);
       } else {
-        res = await fetch(`${API_BASE}/admin/bookings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
+        await bookingService.create(payload);
       }
-      if (!res.ok) throw new Error(editingBooking ? 'Update failed' : 'Creation failed');
       showMessage(editingBooking ? 'Booking updated' : 'Booking created', 'success');
       setModalOpen(false);
       fetchBookings();
@@ -297,17 +198,8 @@ export default function ManageBookingsPage() {
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
-    const token = localStorage.getItem('accessToken');
     try {
-      const res = await fetch(`${API_BASE}/admin/bookings/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error('Status update failed');
+      await bookingService.updateStatus(id, newStatus);
       showMessage('Status updated', 'success');
       fetchBookings();
     } catch (err: any) {
@@ -317,13 +209,8 @@ export default function ManageBookingsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this booking?')) return;
-    const token = localStorage.getItem('accessToken');
     try {
-      const res = await fetch(`${API_BASE}/admin/bookings/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Delete failed');
+      await bookingService.delete(id);
       showMessage('Booking deleted', 'success');
       fetchBookings();
     } catch (err: any) {
@@ -338,7 +225,7 @@ export default function ManageBookingsPage() {
       COMPLETED: 'bg-green-500/20 text-green-300 border-green-500/30',
       CANCELLED: 'bg-red-500/20 text-red-300 border-red-500/30',
     };
-    return styles[status] || 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+    return styles[status] || 'bg-gray-500/20 text-gray-300';
   };
 
   const formatDate = (isoString: string) => {
@@ -368,7 +255,7 @@ export default function ManageBookingsPage() {
         </button>
       </div>
 
-      {/* Filters - unchanged */}
+      {/* Filters */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
@@ -424,7 +311,7 @@ export default function ManageBookingsPage() {
         </div>
       </div>
 
-      {/* Bookings Table - unchanged */}
+      {/* Bookings Table */}
       {loading ? (
         <div className="text-center text-white py-12">Loading bookings...</div>
       ) : bookings.length === 0 ? (
@@ -489,7 +376,6 @@ export default function ManageBookingsPage() {
                 {editingBooking ? 'Edit Booking' : 'Create New Booking'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Business selection (only show if multiple) */}
                 {businesses.length > 1 && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Business</label>
@@ -507,7 +393,6 @@ export default function ManageBookingsPage() {
                   </div>
                 )}
 
-                {/* Service */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Service</label>
                   <select
@@ -524,7 +409,6 @@ export default function ManageBookingsPage() {
                   </select>
                 </div>
 
-                {/* Date */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Date</label>
                   <input
@@ -537,7 +421,6 @@ export default function ManageBookingsPage() {
                   />
                 </div>
 
-                {/* Check Slots Button */}
                 <button
                   type="button"
                   onClick={fetchSlots}
@@ -547,7 +430,6 @@ export default function ManageBookingsPage() {
                   {fetchingSlots ? 'Checking slots...' : 'Check Available Slots'}
                 </button>
 
-                {/* Available Slots */}
                 {slots.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Select Time Slot</label>
@@ -570,7 +452,6 @@ export default function ManageBookingsPage() {
                   </div>
                 )}
 
-                {/* Customer Info */}
                 <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
@@ -589,7 +470,6 @@ export default function ManageBookingsPage() {
                   />
                 </div>
 
-                {/* Vehicle Info */}
                 <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
