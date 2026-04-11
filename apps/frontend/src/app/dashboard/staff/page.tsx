@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Pencil, Trash2, Plus, Search, X, UserCog, CheckCircle, XCircle } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface Staff {
   id: string;

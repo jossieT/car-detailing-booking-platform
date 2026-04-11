@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 
 interface ServiceFormData {
   name: string;
@@ -37,10 +38,7 @@ export default function EditServicePage() {
 
   const fetchService = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/services/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/services/${id}`);
       if (!res.ok) throw new Error('Service not found');
       const data = await res.json();
       setFormData({

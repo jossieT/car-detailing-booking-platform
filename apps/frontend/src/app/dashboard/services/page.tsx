@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Pencil, Trash2, Eye, Plus, Search, X } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 interface Service {
   id: string;
@@ -45,10 +46,8 @@ export default function ServicesPage() {
   const fetchServices = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/services`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const res = await apiFetch(`/services`);
       if (!res.ok) throw new Error('Failed to fetch services');
       const data = await res.json();
       setServices(data);

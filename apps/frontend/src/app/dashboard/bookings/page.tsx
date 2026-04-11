@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 
 interface Booking {
   id: string;
@@ -54,18 +55,34 @@ interface Service {
   duration: number;
 }
 
+interface Business {
+  id: string;
+  name: string;
+}
+
+interface Slot {
+  start: string;
+  end: string;
+  available: boolean;
+  staffId: string;
+}
+
 export default function ManageBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [selectedBusinessId, setSelectedBusinessId] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState('');
+  const [fetchingSlots, setFetchingSlots] = useState(false);
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
-    serviceId: '',
-    date: '',
-    time: '',
     vehicleMake: '',
     vehicleModel: '',
     vehicleYear: '',
@@ -84,14 +101,15 @@ export default function ManageBookingsPage() {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
-  // Fetch bookings whenever filters change
+  useEffect(() => {
+    fetchBookings();
+    fetchServices();
+    fetchBusinesses();
+  }, []);
+
   useEffect(() => {
     fetchBookings();
   }, [filters]);
-
-  useEffect(() => {
-    fetchServices();
-  }, []);
 
   const fetchBookings = async () => {
     setLoading(true);
@@ -103,9 +121,11 @@ export default function ManageBookingsPage() {
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
       if (filters.endDate) queryParams.append('endDate', filters.endDate);
 
-      const res = await fetch(`${API_BASE}/bookings?${queryParams}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    //   const res = await fetch(`${API_BASE}/bookings?${queryParams}`, {
+    //     headers: { Authorization: `Bearer ${token}` },
+    //   });
+
+      const res = await apiFetch(`/bookings?${queryParams}`);
       if (!res.ok) throw new Error('Failed to fetch bookings');
       const data = await res.json();
       setBookings(data);
@@ -125,8 +145,47 @@ export default function ManageBookingsPage() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setServices(data);
+      if (data.length > 0) setSelectedServiceId(data[0].id);
     } catch (err) {
       console.error('Failed to fetch services');
+    }
+  };
+
+  const fetchBusinesses = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`${API_BASE}/businesses`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setBusinesses(data);
+      if (data.length === 1) setSelectedBusinessId(data[0].id);
+    } catch (err) {
+      console.error('Failed to fetch businesses');
+    }
+  };
+
+  const fetchSlots = async () => {
+    if (!selectedDate || !selectedServiceId || !selectedBusinessId) {
+      showMessage('Please select business, service, and date first', 'error');
+      return;
+    }
+    setFetchingSlots(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(
+        `${API_BASE}/bookings/slots?date=${selectedDate}&serviceId=${selectedServiceId}&businessId=${selectedBusinessId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error('Failed to fetch slots');
+      const data = await res.json();
+      setSlots(data);
+      setSelectedSlot('');
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setFetchingSlots(false);
     }
   };
 
@@ -136,12 +195,14 @@ export default function ManageBookingsPage() {
   };
 
   const resetForm = () => {
+    setSelectedBusinessId(businesses.length === 1 ? businesses[0].id : '');
+    setSelectedServiceId(services.length > 0 ? services[0].id : '');
+    setSelectedDate('');
+    setSlots([]);
+    setSelectedSlot('');
     setFormData({
       customerName: '',
       customerEmail: '',
-      serviceId: '',
-      date: '',
-      time: '',
       vehicleMake: '',
       vehicleModel: '',
       vehicleYear: '',
@@ -162,13 +223,13 @@ export default function ManageBookingsPage() {
     setEditingBooking(booking);
     const startDate = new Date(booking.startTime);
     const dateStr = startDate.toISOString().split('T')[0];
-    const timeStr = startDate.toTimeString().slice(0, 5);
+    setSelectedBusinessId(booking.businessId);
+    setSelectedServiceId(booking.serviceId);
+    setSelectedDate(dateStr);
+    setSelectedSlot(booking.startTime);
     setFormData({
       customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
       customerEmail: booking.customer.email,
-      serviceId: booking.serviceId,
-      date: dateStr,
-      time: timeStr,
       vehicleMake: booking.vehicleInfo?.make || '',
       vehicleModel: booking.vehicleInfo?.model || '',
       vehicleYear: booking.vehicleInfo?.year?.toString() || '',
@@ -177,18 +238,23 @@ export default function ManageBookingsPage() {
       notes: booking.notes || '',
       status: booking.status,
     });
+    setSlots([]);
     setModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedSlot) {
+      showMessage('Please select a time slot', 'error');
+      return;
+    }
     const token = localStorage.getItem('accessToken');
-    const startTime = new Date(`${formData.date}T${formData.time}:00.000Z`).toISOString();
     const payload = {
       customerName: formData.customerName,
       customerEmail: formData.customerEmail || undefined,
-      serviceId: formData.serviceId,
-      startTime,
+      serviceId: selectedServiceId,
+      businessId: selectedBusinessId,
+      startTime: selectedSlot,
       vehicleInfo: {
         make: formData.vehicleMake,
         model: formData.vehicleModel,
@@ -285,6 +351,11 @@ export default function ManageBookingsPage() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const formatSlotTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -297,7 +368,7 @@ export default function ManageBookingsPage() {
         </button>
       </div>
 
-      {/* Filters - auto-submit on change, with labels */}
+      {/* Filters - unchanged */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
@@ -307,7 +378,7 @@ export default function ManageBookingsPage() {
               placeholder="Search customer..."
               value={filters.customerName}
               onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-sm"
+              className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm"
             />
           </div>
           <div>
@@ -353,7 +424,7 @@ export default function ManageBookingsPage() {
         </div>
       </div>
 
-      {/* Bookings Table */}
+      {/* Bookings Table - unchanged */}
       {loading ? (
         <div className="text-center text-white py-12">Loading bookings...</div>
       ) : bookings.length === 0 ? (
@@ -377,22 +448,14 @@ export default function ManageBookingsPage() {
                 {bookings.map((booking) => (
                   <tr key={booking.id} className="hover:bg-white/5 transition">
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <Link href={`/dashboard/bookings/${booking.id}`} className="text-white hover:text-purple-400 transition">
+                      <Link href={`/dashboard/bookings/${booking.id}`} className="text-white hover:text-purple-400">
                         {booking.customer.firstName} {booking.customer.lastName}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                      {booking.service.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                      {formatDate(booking.startTime)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                      {formatTime(booking.startTime)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
-                      ${parseFloat(booking.totalPrice).toFixed(2)}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{booking.service.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatDate(booking.startTime)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatTime(booking.startTime)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">${parseFloat(booking.totalPrice).toFixed(2)}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <select
                         value={booking.status}
@@ -406,18 +469,8 @@ export default function ManageBookingsPage() {
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                      <button
-                        onClick={() => openEditModal(booking)}
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(booking.id)}
-                        className="text-red-400 hover:text-red-300"
-                      >
-                        Delete
-                      </button>
+                      <button onClick={() => openEditModal(booking)} className="text-blue-400 hover:text-blue-300">Edit</button>
+                      <button onClick={() => handleDelete(booking.id)} className="text-red-400 hover:text-red-300">Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -427,7 +480,7 @@ export default function ManageBookingsPage() {
         </div>
       )}
 
-      {/* Modal and Toast remain unchanged */}
+      {/* Add/Edit Modal with Slot Flow */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10">
@@ -436,7 +489,89 @@ export default function ManageBookingsPage() {
                 {editingBooking ? 'Edit Booking' : 'Create New Booking'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Business selection (only show if multiple) */}
+                {businesses.length > 1 && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Business</label>
+                    <select
+                      value={selectedBusinessId}
+                      onChange={(e) => setSelectedBusinessId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                      required
+                    >
+                      <option value="">Select Business</option>
+                      {businesses.map((biz) => (
+                        <option key={biz.id} value={biz.id}>{biz.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Service */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Service</label>
+                  <select
+                    value={selectedServiceId}
+                    onChange={(e) => setSelectedServiceId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    required
+                  >
+                    {services.map((svc) => (
+                      <option key={svc.id} value={svc.id}>
+                        {svc.name} - ${typeof svc.basePrice === 'string' ? parseFloat(svc.basePrice).toFixed(2) : svc.basePrice}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    required
+                  />
+                </div>
+
+                {/* Check Slots Button */}
+                <button
+                  type="button"
+                  onClick={fetchSlots}
+                  disabled={fetchingSlots || !selectedDate || !selectedServiceId || !selectedBusinessId}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50"
+                >
+                  {fetchingSlots ? 'Checking slots...' : 'Check Available Slots'}
+                </button>
+
+                {/* Available Slots */}
+                {slots.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Select Time Slot</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {slots.map((slot, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedSlot(slot.start)}
+                          className={`px-3 py-2 text-sm rounded-lg border transition ${
+                            selectedSlot === slot.start
+                              ? 'bg-purple-600 border-purple-400 text-white'
+                              : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:border-purple-500'
+                          }`}
+                        >
+                          {formatSlotTime(slot.start)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Customer Info */}
+                <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
                     placeholder="Customer Name *"
@@ -452,45 +587,10 @@ export default function ManageBookingsPage() {
                     onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                     className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
                   />
-                  <select
-                    value={formData.serviceId}
-                    onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                    required
-                  >
-                    <option value="">Select Service</option>
-                    {services.map((svc) => (
-                      <option key={svc.id} value={svc.id}>
-                        {svc.name} - ${typeof svc.basePrice === 'string' ? parseFloat(svc.basePrice).toFixed(2) : svc.basePrice}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                    required
-                  />
-                  <input
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                    required
-                  />
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  >
-                    <option value="PENDING">Pending</option>
-                    <option value="CONFIRMED">Confirmed</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* Vehicle Info */}
+                <div className="grid grid-cols-2 gap-3">
                   <input
                     type="text"
                     placeholder="Vehicle Make"
@@ -507,7 +607,7 @@ export default function ManageBookingsPage() {
                   />
                   <input
                     type="text"
-                    placeholder="Vehicle Year"
+                    placeholder="Year"
                     value={formData.vehicleYear}
                     onChange={(e) => setFormData({ ...formData, vehicleYear: e.target.value })}
                     className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
@@ -521,31 +621,26 @@ export default function ManageBookingsPage() {
                   />
                   <input
                     type="text"
-                    placeholder="Vehicle Color"
+                    placeholder="Color"
                     value={formData.vehicleColor}
                     onChange={(e) => setFormData({ ...formData, vehicleColor: e.target.value })}
                     className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
                   />
                 </div>
+
                 <textarea
                   placeholder="Notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
+                  rows={2}
                   className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
                 />
-                <div className="flex justify-end gap-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
-                  >
+
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-                  >
+                  <button type="submit" className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">
                     {editingBooking ? 'Update' : 'Create'}
                   </button>
                 </div>
@@ -556,9 +651,7 @@ export default function ManageBookingsPage() {
       )}
 
       {message.text && (
-        <div className={`fixed bottom-4 right-4 p-3 rounded-lg ${
-          message.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        } text-white shadow-lg z-50`}>
+        <div className={`fixed bottom-4 right-4 p-3 rounded-lg ${message.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white shadow-lg z-50`}>
           {message.text}
         </div>
       )}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 
 interface Service {
   id: string;
@@ -34,10 +35,8 @@ export default function ServiceDetailPage() {
 
   const fetchService = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/services/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const res = await apiFetch(`/services/${id}`);
       if (!res.ok) throw new Error('Service not found');
       const data = await res.json();
       setService(data);

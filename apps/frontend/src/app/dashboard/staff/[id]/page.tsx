@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 import {
   ArrowLeft,
   Save,
@@ -67,10 +68,8 @@ export default function StaffDetailPage() {
 
   const fetchStaff = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/users/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const res = await apiFetch(`/users/${id}`);
       if (!res.ok) throw new Error('Staff not found');
       const data = await res.json();
       setStaff(data);

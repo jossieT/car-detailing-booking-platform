@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 
 interface BookingDetail {
   id: string;
@@ -63,10 +64,11 @@ export default function BookingDetailPage() {
 
   const fetchBooking = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/bookings/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    //   const token = localStorage.getItem('accessToken');
+    //   const res = await fetch(`${API_BASE}/bookings/${id}`, {
+    //     headers: { Authorization: `Bearer ${token}` },
+    //   });
+      const res = await apiFetch(`/bookings/${id}`);
       if (!res.ok) throw new Error('Booking not found');
       const data = await res.json();
       setBooking(data);

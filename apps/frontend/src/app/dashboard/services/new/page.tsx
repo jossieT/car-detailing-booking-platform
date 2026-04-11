@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 
 interface ServiceFormData {
   name: string;
@@ -47,15 +48,11 @@ export default function NewServicePage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/services`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
+      
+     const res = await apiFetch('/services', {
+     method: 'POST',
+     body: JSON.stringify(formData),
+     });
       if (!res.ok) throw new Error('Creation failed');
       showMessage('Service created successfully', 'success');
       setTimeout(() => router.push('/dashboard/services'), 1500);
