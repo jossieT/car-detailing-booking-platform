@@ -142,7 +142,7 @@ export default function BookingsPage() {
     setEditingBooking(booking);
     const startDate = new Date(booking.startTime);
     const dateStr = startDate.toISOString().split('T')[0];
-    setSelectedBusinessId(booking.businessId);
+    //setSelectedBusinessId(booking.businessId);
     setSelectedServiceId(booking.serviceId);
     setSelectedDate(dateStr);
     setSelectedSlot(booking.startTime);
