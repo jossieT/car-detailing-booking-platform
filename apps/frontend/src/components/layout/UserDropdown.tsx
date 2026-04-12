@@ -17,7 +17,7 @@ export default function UserDropdown() {
       try {
         const user = JSON.parse(userStr);
         setUserName(user.firstName || user.email?.split('@')[0] || 'Admin');
-        setUserEmail(user.email || 'admin@cardetailing.com');
+        setUserEmail(user.email);
       } catch (e) {}
     }
   }, []);

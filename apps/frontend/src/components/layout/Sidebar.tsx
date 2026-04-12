@@ -29,7 +29,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
       } transition-all duration-300 ease-in-out bg-white/5 backdrop-blur-lg border-r border-white/10 flex flex-col flex-shrink-0 relative group`}
     >
       {/* Logo & Toggle */}
-      <div className="flex items-center justify-between p-4 border-b border-white/10">
+      <div className="flex items-center justify-between px-6 py-3 h-14 border-b border-white/10">
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
             <div className="w-8 h-8 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg">
@@ -54,7 +54,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-6 space-y-1 overflow-y-auto">
+<nav className="flex-1 py-6 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -82,7 +82,6 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
           );
         })}
       </nav>
-
       {/* Logout */}
       <div className="border-t border-white/10 p-3">
         <button

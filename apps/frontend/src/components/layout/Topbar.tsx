@@ -10,7 +10,7 @@ export default function Topbar() {
   const currentPage = navItems.find((i) => i.href === pathname)?.name || 'Dashboard';
 
   return (
-    <header className="bg-white/5 backdrop-blur-lg border-b border-white/10 px-6 py-3 flex justify-between items-center flex-shrink-0">
+    <header className="bg-white/5 backdrop-blur-lg border-b border-white/10 px-6 py-3 h-14 flex justify-between items-center flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         <h1 className="text-xl font-semibold text-white truncate">{currentPage}</h1>
       </div>

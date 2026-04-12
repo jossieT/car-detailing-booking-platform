@@ -320,6 +320,7 @@ model AuditLog {
 }
 
 enum UserRole {
+  OWNER
   ADMIN
   MANAGER
   STAFF

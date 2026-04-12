@@ -27,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 //   }
 
   return (
-    <div className="h-screen flex overflow-hidden overflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="h-screen flex overflow-hidden overscroll-x-noneoverflow-x-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Topbar />
