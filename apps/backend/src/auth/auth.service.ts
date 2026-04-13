@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
@@ -6,6 +6,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { randomBytes } from 'crypto';
 import { addDays } from 'date-fns';
+import { SignupDto } from './dto/signup.dto';
+import { defaultServices } from '../businesses/default-services';
 
 type AuthenticatedUser = Omit<
   Awaited<ReturnType<UsersService['findByEmailOrPhone']>>,
@@ -19,6 +21,88 @@ export class AuthService {
     private jwtService: JwtService,
     private prisma: PrismaService,
   ) {}
+
+async signup(dto: SignupDto) {
+    // Check existing user
+    const existing = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existing) throw new ConflictException('Email already registered');
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // Transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Create business
+      const business = await tx.business.create({
+        data: {
+          name: dto.businessName,
+          address: dto.businessAddress,
+          phone: dto.businessPhone,
+          email: dto.businessEmail,
+          closedDays: [],
+          workingHours: {},
+        },
+      });
+
+      // 2. Create user (owner)
+      const user = await tx.user.create({
+        data: {
+          email: dto.email,
+          passwordHash: hashedPassword,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          role: 'OWNER',
+          isActive: true,
+          businessId: business.id,
+        },
+      });
+
+      // 3. Create default services
+      for (const svc of defaultServices) {
+        await tx.service.create({
+          data: {
+            ...svc,
+            businessId: business.id,
+          },
+        });
+      }
+
+      return { business, user };
+    });
+
+    // Generate tokens
+    const payload = {
+      sub: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      businessId: result.business.id,
+    };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+    // Store refresh token
+    await this.prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: result.user.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        role: result.user.role,
+        businessId: result.business.id,
+      },
+    };
+  }
 
   async validateUser(
     identifier: string,

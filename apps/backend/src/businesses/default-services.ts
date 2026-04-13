@@ -1,0 +1,38 @@
+export const defaultServices = [
+  {
+    name: 'Essential Wash',
+    duration: 45,
+    basePrice: 35,
+    description: 'Exterior hand wash, wheel cleaning, and tire shine.',
+    bufferMinutes: 30,
+    capacity: 1,
+    isActive: true,
+  },
+  {
+    name: 'Premium Interior',
+    duration: 90,
+    basePrice: 89,
+    description: 'Deep interior vacuum, steam cleaning, and leather conditioning.',
+    bufferMinutes: 30,
+    capacity: 1,
+    isActive: true,
+  },
+  {
+    name: 'The Works',
+    duration: 120,
+    basePrice: 129,
+    description: 'Complete exterior and interior detailing.',
+    bufferMinutes: 30,
+    capacity: 1,
+    isActive: true,
+  },
+  {
+    name: 'Ceramic Shield',
+    duration: 360,
+    basePrice: 650,
+    description: 'Multi-year ceramic coating for ultimate protection.',
+    bufferMinutes: 30,
+    capacity: 1,
+    isActive: true,
+  },
+];
