@@ -1,4 +1,4 @@
-import { IsUUID, IsDateString, IsOptional, IsString, IsObject, ValidateNested } from 'class-validator';
+import { IsUUID, IsDateString, IsOptional, IsString, IsObject, ValidateNested, IsPhoneNumber, IsEmail } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class VehicleInfoDto {
@@ -32,8 +32,8 @@ export class CreateBookingDto {
   @IsDateString()
   startTime: string;
 
-  @IsDateString()
-  endTime: string;
+  @IsString()
+  customerName: string;
 
   @IsOptional()
   @IsUUID()
@@ -43,6 +43,9 @@ export class CreateBookingDto {
   @IsString()
   notes?: string;
 
+   @IsEmail()
+   customerEmail?: string;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => VehicleInfoDto)
@@ -50,4 +53,7 @@ export class CreateBookingDto {
 
   @IsUUID()   // ensure client sends a UUID for idempotency
   idempotencyKey: string;
+
+  @IsPhoneNumber()
+  customerPhone?: string;
 }

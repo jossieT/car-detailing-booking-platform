@@ -157,6 +157,10 @@ async signup(dto: SignupDto) {
   }
 
   async refreshToken(refreshToken: string) {
+
+     if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not provided');
+    }
     const tokenRecord = await this.prisma.refreshToken.findUnique({
       where: { token: refreshToken },
       include: { user: true },

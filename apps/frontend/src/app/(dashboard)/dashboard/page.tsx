@@ -49,7 +49,7 @@ export default function DashboardPage() {
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
-        setUserName(user.firstName || user.email || 'Admin');
+        setUserName(user.firstName);
       } catch (e) {}
     }
     fetchDashboardData();

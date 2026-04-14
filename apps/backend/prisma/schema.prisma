@@ -27,11 +27,11 @@ model Business {
 
 model User {
   id            String         @id @default(cuid())
-  email         String         @unique
+  email         String?        @unique
   passwordHash  String
   firstName     String
   lastName      String
-  phone         String?
+  phone         String?        @unique
   role          UserRole       @default(CUSTOMER)
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())

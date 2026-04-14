@@ -15,10 +15,9 @@ interface Business {
   name: string;
 }
 
-// Updated Slot interface to match backend response
 interface Slot {
-  start: string;      // ISO string
-  end: string;        // ISO string
+  start: string;
+  end: string;
   available: boolean;
   staffId: string;
 }
@@ -32,7 +31,7 @@ export default function BookingsPage() {
   const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState(''); // stores the start time string
+  const [selectedSlot, setSelectedSlot] = useState('');
   const [vehicleInfo, setVehicleInfo] = useState({
     make: '',
     model: '',
@@ -45,8 +44,31 @@ export default function BookingsPage() {
   const [fetchingSlots, setFetchingSlots] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'error' });
   const [token, setToken] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+
+  // Customer information - always visible
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+
+  const generateIdempotencyKey = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  const resetBookingForm = () => {
+    setSelectedSlot('');
+    setVehicleInfo({ make: '', model: '', year: '', licensePlate: '', color: '' });
+    setNotes('');
+    setDate('');
+    setSlots([]);
+    setIdempotencyKey(generateIdempotencyKey());
+    // Optionally keep customer info
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -62,6 +84,7 @@ export default function BookingsPage() {
     setToken(accessToken);
     fetchBusinesses(accessToken);
     fetchServices(accessToken);
+    setIdempotencyKey(generateIdempotencyKey());
   }, [mounted, router]);
 
   const fetchBusinesses = async (authToken: string) => {
@@ -106,7 +129,6 @@ export default function BookingsPage() {
       );
       if (!res.ok) throw new Error('Failed to fetch slots');
       const data = await res.json();
-      // data is array of { start, end, available, staffId }
       setSlots(data);
       setSelectedSlot('');
       if (data.length === 0) {
@@ -120,8 +142,21 @@ export default function BookingsPage() {
   };
 
   const createBooking = async () => {
-    if (!selectedSlot || !vehicleInfo.make || !vehicleInfo.model) {
-      setMessage({ text: 'Please select a slot and fill vehicle make & model', type: 'error' });
+    // Validate required customer info
+    if (!customerName.trim()) {
+      setMessage({ text: 'Please enter your full name', type: 'error' });
+      return;
+    }
+    if (!customerPhone.trim()) {
+      setMessage({ text: 'Please enter your phone number', type: 'error' });
+      return;
+    }
+    if (!selectedSlot) {
+      setMessage({ text: 'Please select a time slot', type: 'error' });
+      return;
+    }
+    if (!vehicleInfo.make || !vehicleInfo.model) {
+      setMessage({ text: 'Please fill vehicle make & model', type: 'error' });
       return;
     }
 
@@ -137,9 +172,13 @@ export default function BookingsPage() {
         body: JSON.stringify({
           serviceId,
           businessId,
-          startTime: selectedSlot,   // send the selected start time
+          startTime: selectedSlot,
           vehicleInfo,
           notes,
+          idempotencyKey,
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          customerEmail: customerEmail.trim() || undefined,
         }),
       });
 
@@ -147,12 +186,11 @@ export default function BookingsPage() {
       if (!res.ok) throw new Error(data.message || 'Booking failed');
 
       setMessage({ text: '✅ Booking created successfully!', type: 'success' });
-      // Reset form
-      setSelectedSlot('');
-      setVehicleInfo({ make: '', model: '', year: '', licensePlate: '', color: '' });
-      setNotes('');
-      setDate('');
-      setSlots([]);
+      resetBookingForm();
+      // Optionally clear customer info after successful booking
+      setCustomerName('');
+      setCustomerPhone('');
+      setCustomerEmail('');
     } catch (err: any) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
@@ -160,7 +198,6 @@ export default function BookingsPage() {
     }
   };
 
-  // Helper to format ISO time to local time string
   const formatTime = (isoString: string): string => {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return 'Invalid time';
@@ -228,6 +265,34 @@ export default function BookingsPage() {
             />
           </div>
 
+          {/* Customer Information - ALWAYS VISIBLE */}
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-white mb-4">Your Information</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              <input
+                type="text"
+                placeholder="Full Name *"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              />
+              <input
+                type="tel"
+                placeholder="Phone Number *"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                className="px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              />
+              <input
+                type="email"
+                placeholder="Email (optional)"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                className="px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              />
+            </div>
+          </div>
+
           {/* Check Slots Button */}
           <button
             onClick={fetchSlots}
@@ -259,21 +324,21 @@ export default function BookingsPage() {
             </div>
           )}
 
-          {/* Vehicle Information Form */}
+          {/* Vehicle Information (only after slot selected) */}
           {selectedSlot && (
             <div className="border-t border-white/10 pt-6 mt-6">
               <h2 className="text-xl font-semibold text-white mb-4">Vehicle Information</h2>
               <div className="grid md:grid-cols-2 gap-4 mb-4">
                 <input
                   type="text"
-                  placeholder="Make (e.g., Toyota)"
+                  placeholder="Make (e.g., Toyota) *"
                   value={vehicleInfo.make}
                   onChange={(e) => setVehicleInfo({ ...vehicleInfo, make: e.target.value })}
                   className="px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                 />
                 <input
                   type="text"
-                  placeholder="Model (e.g., Camry)"
+                  placeholder="Model (e.g., Camry) *"
                   value={vehicleInfo.model}
                   onChange={(e) => setVehicleInfo({ ...vehicleInfo, model: e.target.value })}
                   className="px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"

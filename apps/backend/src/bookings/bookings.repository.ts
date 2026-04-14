@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, BookingStatus, UserRole } from '@prisma/client';
+import { Booking, Prisma, BookingStatus, UserRole } from '@prisma/client';
 
 @Injectable()
 export class BookingsRepository {
@@ -13,19 +13,31 @@ export class BookingsRepository {
     customerId: string;
     serviceId: string;
     businessId: string; // Add businessId
-    startTime: Date;
-    endTime: Date;
+    startTime: string | Date;
+    endTime: string | Date;
     totalPrice: number;
     staffId?: string;
     notes?: string;
     vehicleInfo?: Record<string, any>;
     idempotencyKey: string;
   }) {
+
+    // Convert and validate dates
+    const startTime = data.startTime instanceof Date ? data.startTime : new Date(data.startTime);
+    const endTime = data.endTime instanceof Date ? data.endTime : new Date(data.endTime);
+
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+      throw new BadRequestException('Invalid start or end time');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // 1. Check idempotency key to prevent duplicate charging / booking
-      const existing = await tx.booking.findUnique({
-        where: { idempotencyKey: data.idempotencyKey },
-      });
+      let existing: Booking | null = null;
+      if (data.idempotencyKey) {
+        existing = await tx.booking.findUnique({
+          where: { idempotencyKey: data.idempotencyKey },
+        });
+      }
       if (existing) {
         return existing;
       }
@@ -39,8 +51,8 @@ export class BookingsRepository {
       }
 
       const bookingBufferMs = service.bufferMinutes * 60000;
-      const effectiveStart = new Date(data.startTime.getTime() - bookingBufferMs);
-      const effectiveEnd = new Date(data.endTime.getTime() + bookingBufferMs);
+      const effectiveStart = new Date(startTime.getTime() - bookingBufferMs);
+      const effectiveEnd = new Date(endTime.getTime() + bookingBufferMs);
 
       const overlappingStatuses = [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS];
       const overlappingCount = await tx.booking.count({
@@ -102,8 +114,8 @@ export class BookingsRepository {
           staffId: assignedStaffId,
           serviceId: data.serviceId,
           businessId: data.businessId, // Add businessId
-          startTime: data.startTime,
-          endTime: data.endTime,
+          startTime: startTime,
+          endTime: endTime,
           totalPrice: new Prisma.Decimal(data.totalPrice),
           notes: data.notes,
           vehicleInfo: data.vehicleInfo ? data.vehicleInfo : Prisma.JsonNull,

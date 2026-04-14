@@ -32,6 +32,7 @@ export default function BookingsPage() {
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
+    customerPhone: '',
     vehicleMake: '',
     vehicleModel: '',
     vehicleYear: '',
@@ -122,6 +123,7 @@ export default function BookingsPage() {
     setFormData({
       customerName: '',
       customerEmail: '',
+      customerPhone: '',
       vehicleMake: '',
       vehicleModel: '',
       vehicleYear: '',
@@ -142,13 +144,13 @@ export default function BookingsPage() {
     setEditingBooking(booking);
     const startDate = new Date(booking.startTime);
     const dateStr = startDate.toISOString().split('T')[0];
-    //setSelectedBusinessId(booking.businessId);
     setSelectedServiceId(booking.serviceId);
     setSelectedDate(dateStr);
     setSelectedSlot(booking.startTime);
     setFormData({
       customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
       customerEmail: booking.customer.email,
+      customerPhone: booking.customer.phone || '',
       vehicleMake: booking.vehicleInfo?.make || '',
       vehicleModel: booking.vehicleInfo?.model || '',
       vehicleYear: booking.vehicleInfo?.year?.toString() || '',
@@ -170,6 +172,7 @@ export default function BookingsPage() {
     const payload = {
       customerName: formData.customerName,
       customerEmail: formData.customerEmail || undefined,
+      customerPhone: formData.customerPhone || undefined,
       serviceId: selectedServiceId,
       businessId: selectedBusinessId,
       startTime: selectedSlot,
@@ -255,7 +258,7 @@ export default function BookingsPage() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Filters (unchanged) */}
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
@@ -311,7 +314,7 @@ export default function BookingsPage() {
         </div>
       </div>
 
-      {/* Bookings Table */}
+      {/* Bookings Table (unchanged) */}
       {loading ? (
         <div className="text-center text-white py-12">Loading bookings...</div>
       ) : bookings.length === 0 ? (
@@ -367,7 +370,7 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {/* Add/Edit Modal with Slot Flow */}
+      {/* Modal with sections */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10">
@@ -375,7 +378,8 @@ export default function BookingsPage() {
               <h3 className="text-xl font-bold text-white mb-4">
                 {editingBooking ? 'Edit Booking' : 'Create New Booking'}
               </h3>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Business & Service (inline) */}
                 {businesses.length > 1 && (
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Business</label>
@@ -421,19 +425,21 @@ export default function BookingsPage() {
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={fetchSlots}
-                  disabled={fetchingSlots || !selectedDate || !selectedServiceId || !selectedBusinessId}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50"
-                >
-                  {fetchingSlots ? 'Checking slots...' : 'Check Available Slots'}
-                </button>
-
-                {slots.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Select Time Slot</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {/* Available Time Slots section */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-slate-300">Available Time Slots</label>
+                    <button
+                      type="button"
+                      onClick={fetchSlots}
+                      disabled={fetchingSlots || !selectedDate || !selectedServiceId || !selectedBusinessId}
+                      className="px-3 py-1 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50"
+                    >
+                      {fetchingSlots ? 'Checking...' : 'Check Slots'}
+                    </button>
+                  </div>
+                  {slots.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                       {slots.map((slot, idx) => (
                         <button
                           key={idx}
@@ -449,67 +455,86 @@ export default function BookingsPage() {
                         </button>
                       ))}
                     </div>
+                  ) : (
+                    <div className="text-sm text-slate-400 mt-1">Click "Check Slots" to see available times</div>
+                  )}
+                </div>
+
+                {/* Customer Information section */}
+                <div className="border-t border-white/10 pt-4">
+                  <h4 className="text-md font-semibold text-white mb-3">Customer Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Full Name *"
+                      value={formData.customerName}
+                      onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                      required
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Phone Number *"
+                      value={formData.customerPhone}
+                      onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                      required
+                    />
+                    <input
+                      type="email"
+                      placeholder="Email (optional)"
+                      value={formData.customerEmail}
+                      onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
                   </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    placeholder="Customer Name *"
-                    value={formData.customerName}
-                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                    required
-                  />
-                  <input
-                    type="email"
-                    placeholder="Customer Email"
-                    value={formData.customerEmail}
-                    onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    placeholder="Vehicle Make"
-                    value={formData.vehicleMake}
-                    onChange={(e) => setFormData({ ...formData, vehicleMake: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Vehicle Model"
-                    value={formData.vehicleModel}
-                    onChange={(e) => setFormData({ ...formData, vehicleModel: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Year"
-                    value={formData.vehicleYear}
-                    onChange={(e) => setFormData({ ...formData, vehicleYear: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="License Plate"
-                    value={formData.vehicleLicensePlate}
-                    onChange={(e) => setFormData({ ...formData, vehicleLicensePlate: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Color"
-                    value={formData.vehicleColor}
-                    onChange={(e) => setFormData({ ...formData, vehicleColor: e.target.value })}
-                    className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
-                  />
+                {/* Vehicle Information section */}
+                <div className="border-t border-white/10 pt-4">
+                  <h4 className="text-md font-semibold text-white mb-3">Vehicle Information</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="Make *"
+                      value={formData.vehicleMake}
+                      onChange={(e) => setFormData({ ...formData, vehicleMake: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Model *"
+                      value={formData.vehicleModel}
+                      onChange={(e) => setFormData({ ...formData, vehicleModel: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Year"
+                      value={formData.vehicleYear}
+                      onChange={(e) => setFormData({ ...formData, vehicleYear: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="License Plate"
+                      value={formData.vehicleLicensePlate}
+                      onChange={(e) => setFormData({ ...formData, vehicleLicensePlate: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Color"
+                      value={formData.vehicleColor}
+                      onChange={(e) => setFormData({ ...formData, vehicleColor: e.target.value })}
+                      className="px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                  </div>
                 </div>
 
+                {/* Notes */}
                 <textarea
-                  placeholder="Notes"
+                  placeholder="Notes (optional)"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2}

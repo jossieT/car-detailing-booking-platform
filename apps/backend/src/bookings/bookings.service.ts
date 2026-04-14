@@ -111,18 +111,61 @@ export class BookingsService {
     const business = await this.prisma.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException('Business not found');
 
+// --- CUSTOMER CREATION / LOOKUP (guest booking) ---
+    let customer = await this.prisma.user.findUnique({
+      where: { phone: createBookingDto.customerPhone },
+    });
+    if (!customer) {
+      const nameParts = createBookingDto.customerName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      customer = await this.prisma.user.create({
+        data: {
+          email: createBookingDto.customerEmail,
+          phone: createBookingDto.customerPhone,
+          firstName,
+          lastName,
+          role: UserRole.CUSTOMER,
+          isActive: true,
+          businessId, // optional, could be null if a customer can belong to multiple businesses
+          passwordHash: '', // guest cannot log in
+        },
+      });
+    } else {
+  // Optionally update name/email if changed
+      const updateData: any = {};
+      const nameParts = createBookingDto.customerName.trim().split(' ');
+      const newFirstName = nameParts[0] || '';
+      const newLastName = nameParts.slice(1).join(' ') || '';
+      if (customer.firstName !== newFirstName) updateData.firstName = newFirstName;
+      if (customer.lastName !== newLastName) updateData.lastName = newLastName;
+      if (createBookingDto.customerEmail && customer.email !== createBookingDto.customerEmail) {
+        updateData.email = createBookingDto.customerEmail;
+      }
+      if (Object.keys(updateData).length > 0) {
+        customer = await this.prisma.user.update({
+          where: { id: customer.id },
+          data: updateData,
+        });
+      }
+    }
+
     const startTime = new Date(createBookingDto.startTime);
-    const endTime = new Date(createBookingDto.endTime);
+    if (isNaN(startTime.getTime())) {
+      throw new BadRequestException('Invalid start time');
+    }
+
+    const endTime = new Date(startTime.getTime() + service.duration * 60000);
 
     if (startTime >= endTime) {
       throw new BadRequestException('End time must be after start time');
     }
 
-    const expectedDurationMs = service.duration * 60000;
-    const actualDurationMs = endTime.getTime() - startTime.getTime();
-    if (actualDurationMs !== expectedDurationMs && user.role === UserRole.CUSTOMER) {
-      throw new BadRequestException(`Booking duration must match service duration (${service.duration} mins)`);
-    }
+    // const expectedDurationMs = service.duration * 60000;
+    // const actualDurationMs = endTime.getTime() - startTime.getTime();
+    // if (actualDurationMs !== expectedDurationMs && user.role === UserRole.CUSTOMER) {
+    //   throw new BadRequestException(`Booking duration must match service duration (${service.duration} mins)`);
+    // }
 
     const maxRetries = 3;
     let lastError: any;
@@ -130,7 +173,7 @@ export class BookingsService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const booking = await this.repository.createBookingWithLock({
-          customerId: user.userId,
+          customerId: customer.id,
           serviceId: service.id,
           businessId,
           startTime,
