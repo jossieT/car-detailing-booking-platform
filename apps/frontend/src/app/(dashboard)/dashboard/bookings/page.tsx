@@ -356,7 +356,8 @@ export default function BookingsPage() {
                       <select
                         value={booking.status}
                         onChange={(e) => handleStatusChange(booking.id, e.target.value)}
-                        className={`px-2 py-1 text-xs rounded-full border ${getStatusBadge(booking.status)} bg-transparent`}
+                        disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
+                        className={`px-2 py-1 text-xs rounded-full border ${getStatusBadge(booking.status)} bg-transparent disabled:opacity-50`}
                       >
                         <option value="PENDING">Pending</option>
                         <option value="CONFIRMED">Confirmed</option>
@@ -365,8 +366,20 @@ export default function BookingsPage() {
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                      <button onClick={() => openEditModal(booking)} className="text-blue-400 hover:text-blue-300">Edit</button>
-                      <button onClick={() => handleDelete(booking.id)} className="text-red-400 hover:text-red-300">Delete</button>
+                      <button
+                        onClick={() => openEditModal(booking)}
+                        disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
+                        className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(booking.id)}
+                        disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
+                        className="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}

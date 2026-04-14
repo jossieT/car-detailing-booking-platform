@@ -88,16 +88,14 @@ export default function BookingDetailPage() {
     if (!confirm(`Change status to ${newStatus}?`)) return;
     setUpdating(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/admin/bookings/${id}/status`, {
+      const res = await apiFetch(`/bookings/${id}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Status update failed');
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Status update failed');
+      }
       showMessage(`Status updated to ${newStatus}`, 'success');
       fetchBooking();
     } catch (err: any) {
@@ -179,31 +177,40 @@ export default function BookingDetailPage() {
           </div>
           <div className="flex gap-2 flex-wrap">
             {booking.status === 'PENDING' && (
-              <button
-                onClick={() => updateStatus('CONFIRMED')}
-                disabled={updating}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
-              >
-                Approve Booking
-              </button>
-            )}
-            {booking.status !== 'CANCELLED' && booking.status !== 'COMPLETED' && (
-              <button
-                onClick={() => updateStatus('CANCELLED')}
-                disabled={updating}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
-              >
-                Cancel Booking
-              </button>
+              <>
+                <button
+                  onClick={() => updateStatus('CONFIRMED')}
+                  disabled={updating}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
+                >
+                  Approve Booking
+                </button>
+                <button
+                  onClick={() => updateStatus('CANCELLED')}
+                  disabled={updating}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
+                >
+                  Cancel Booking
+                </button>
+              </>
             )}
             {booking.status === 'CONFIRMED' && (
-              <button
-                onClick={() => updateStatus('COMPLETED')}
-                disabled={updating}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
-              >
-                Mark Completed
-              </button>
+              <>
+                <button
+                  onClick={() => updateStatus('COMPLETED')}
+                  disabled={updating}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
+                >
+                  Mark Completed
+                </button>
+                <button
+                  onClick={() => updateStatus('CANCELLED')}
+                  disabled={updating}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50 text-sm"
+                >
+                  Cancel Booking
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -247,8 +254,12 @@ export default function BookingDetailPage() {
                 <p className="text-white">{date}</p>
               </div>
               <div>
-                <label className="text-slate-400 text-sm">Time</label>
+                <label className="text-slate-400 text-sm">Start Time</label>
                 <p className="text-white">{time}</p>
+              </div>
+              <div>
+                <label className="text-slate-400 text-sm">End Time</label>
+                <p className="text-white">{formatDateTime(booking.endTime).time}</p>
               </div>
               <div>
                 <label className="text-slate-400 text-sm">Duration</label>
