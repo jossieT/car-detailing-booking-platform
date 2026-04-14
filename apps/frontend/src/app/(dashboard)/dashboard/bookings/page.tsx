@@ -99,9 +99,15 @@ export default function BookingsPage() {
     }
     setFetchingSlots(true);
     try {
-      const data = await bookingService.getSlots(selectedDate, selectedServiceId, selectedBusinessId);
+      const data = await bookingService.getSlots(selectedDate, selectedServiceId, selectedBusinessId, editingBooking?.id);
       setSlots(data);
-      setSelectedSlot('');
+      if (!editingBooking) {
+        setSelectedSlot('');
+      } else {
+        // If the current slot is not in the newly fetched slots (which should include it now),
+        // we might want to keep it or reset it.
+        // For now, keeping it is safer as it's the "original" slot.
+      }
     } catch (err: any) {
       showMessage(err.message, 'error');
     } finally {

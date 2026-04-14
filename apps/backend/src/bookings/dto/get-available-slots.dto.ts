@@ -16,4 +16,8 @@ export class GetAvailableSlotsDto {
   @IsOptional()
   @IsUUID()
   staffId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  excludeBookingId?: string;
 }

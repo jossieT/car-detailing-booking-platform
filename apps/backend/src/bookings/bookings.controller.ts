@@ -14,6 +14,7 @@ import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { GetAvailableSlotsDto } from './dto/get-available-slots.dto';
+import { FindAllBookingsDto } from './dto/find-all-bookings.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -32,8 +33,9 @@ export class BookingsController {
     return this.bookingsService.getAvailableSlots(
       query.date,
       query.serviceId,
-      query.businessId, // Use businessId from query params
+      query.businessId,
       query.staffId,
+      query.excludeBookingId,
     );
   }
 
@@ -52,8 +54,8 @@ export class BookingsController {
    * Returns all bookings visible to the authenticated user.
    */
   @Get()
-  findAll(@Request() req: any) {
-    return this.bookingsService.findAll(req.user);
+  findAll(@Request() req: any, @Query() query: FindAllBookingsDto) {
+    return this.bookingsService.findAll(req.user, query);
   }
 
   /**

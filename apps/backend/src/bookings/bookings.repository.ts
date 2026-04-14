@@ -157,7 +157,7 @@ export class BookingsRepository {
   /**
    * Get all overlapping bookings for a service on a given day (for slot generation).
    */
-  async getOverlappingBookingsForService(dayStart: Date, dayEnd: Date, serviceId: string, businessId: string) {
+  async getOverlappingBookingsForService(dayStart: Date, dayEnd: Date, serviceId: string, businessId: string, excludeBookingId?: string) {
     return this.prisma.booking.findMany({
       where: {
         serviceId,
@@ -165,6 +165,7 @@ export class BookingsRepository {
         status: { notIn: [BookingStatus.CANCELLED, BookingStatus.NO_SHOW] },
         startTime: { lt: dayEnd },
         endTime: { gt: dayStart },
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       },
       select: { startTime: true, endTime: true },
     });
@@ -179,6 +180,7 @@ export class BookingsRepository {
     endTime: Date,
     businessId: string,
     bufferMinutes = 0,
+    excludeBookingId?: string,
   ): Promise<boolean> {
     const bufferMs = bufferMinutes * 60000;
     const effectiveStart = new Date(startTime.getTime() - bufferMs);
@@ -191,6 +193,7 @@ export class BookingsRepository {
         status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
         startTime: { lt: effectiveEnd },
         endTime: { gt: effectiveStart },
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       },
     });
     return !overlap;
@@ -204,6 +207,7 @@ export class BookingsRepository {
     endTime: Date,
     businessId: string,
     bufferMinutes = 0,
+    excludeBookingId?: string,
   ): Promise<{ id: string }[]> {
     const bufferMs = bufferMinutes * 60000;
     const effectiveStart = new Date(startTime.getTime() - bufferMs);
@@ -215,6 +219,7 @@ export class BookingsRepository {
         status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.IN_PROGRESS] },
         startTime: { lt: effectiveEnd },
         endTime: { gt: effectiveStart },
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       },
       select: { staffId: true },
       distinct: ['staffId'],
@@ -248,7 +253,7 @@ export class BookingsRepository {
       include: {
         service: true,
         staff: { select: { id: true, firstName: true, lastName: true } },
-        customer: { select: { id: true, firstName: true, lastName: true, email: true } },
+        customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
       },
       orderBy: { startTime: 'desc' },
     });

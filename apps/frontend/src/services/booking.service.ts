@@ -25,7 +25,7 @@ export const bookingService = {
   },
 
   async update(id: string, data: any): Promise<Booking> {
-    const res = await apiFetch(`/admin/bookings/${id}`, {
+    const res = await apiFetch(`/bookings/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -34,7 +34,7 @@ export const bookingService = {
   },
 
   async updateStatus(id: string, status: string): Promise<void> {
-    const res = await apiFetch(`/admin/bookings/${id}/status`, {
+    const res = await apiFetch(`/bookings/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
@@ -42,12 +42,14 @@ export const bookingService = {
   },
 
   async delete(id: string): Promise<void> {
-    const res = await apiFetch(`/admin/bookings/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/bookings/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Delete failed');
   },
 
-  async getSlots(date: string, serviceId: string, businessId: string): Promise<any[]> {
-    const res = await apiFetch(`/bookings/slots?date=${date}&serviceId=${serviceId}&businessId=${businessId}`);
+  async getSlots(date: string, serviceId: string, businessId: string, excludeBookingId?: string): Promise<any[]> {
+    let url = `/bookings/slots?date=${date}&serviceId=${serviceId}&businessId=${businessId}`;
+    if (excludeBookingId) url += `&excludeBookingId=${excludeBookingId}`;
+    const res = await apiFetch(url);
     if (!res.ok) throw new Error('Failed to fetch slots');
     return res.json();
   },

@@ -7,6 +7,7 @@ import { getBusinessDayRange } from './helpers/timezone-utils';
 import { NotificationService } from './notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole, BookingStatus, Prisma } from '@prisma/client';
+import { FindAllBookingsDto } from './dto/find-all-bookings.dto';
 
 @Injectable()
 export class BookingsService {
@@ -16,7 +17,7 @@ export class BookingsService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async getAvailableSlots(dateString: string, serviceId: string, businessId: string, requestedStaffId?: string) {
+  async getAvailableSlots(dateString: string, serviceId: string, businessId: string, requestedStaffId?: string, excludeBookingId?: string) {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) throw new BadRequestException('Invalid date');
 
@@ -42,6 +43,7 @@ export class BookingsService {
       dayEnd,
       serviceId,
       businessId,
+      excludeBookingId,
     );
 
     const bookingBufferMs = bufferMinutes * 60000;
@@ -73,6 +75,7 @@ export class BookingsService {
             slot.end,
             businessId,
             bufferMinutes,
+            excludeBookingId,
           );
           if (freeStaff.length > 0) {
             availableStaffId = freeStaff[0].id;
@@ -202,13 +205,39 @@ export class BookingsService {
     throw lastError;
   }
 
-  async findAll(user: { userId: string; role: string }) {
+  async findAll(user: { userId: string; role: string }, query: FindAllBookingsDto) {
     const where: Prisma.BookingWhereInput = {};
     if (user.role === UserRole.CUSTOMER) {
       where.customerId = user.userId;
     } else if (user.role === UserRole.STAFF) {
       where.staffId = user.userId;
     }
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    if (query.customerName) {
+      where.customer = {
+        OR: [
+          { firstName: { contains: query.customerName, mode: 'insensitive' } },
+          { lastName: { contains: query.customerName, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    if (query.startDate || query.endDate) {
+      where.startTime = {};
+      if (query.startDate) {
+        where.startTime.gte = new Date(query.startDate);
+      }
+      if (query.endDate) {
+        const end = new Date(query.endDate);
+        end.setHours(23, 59, 59, 999);
+        where.startTime.lte = end;
+      }
+    }
+
     return this.repository.findAll(where);
   }
 
@@ -226,11 +255,37 @@ export class BookingsService {
   }
 
   async update(id: string, updateBookingDto: UpdateBookingDto, user: { userId: string; role: string }) {
-    await this.findOne(id, user); // ensures existence and permission
+    const booking = await this.findOne(id, user); // ensures existence and permission
     if (user.role === UserRole.CUSTOMER) {
       throw new ForbiddenException('Customers cannot update booking metadata');
     }
+
+    if (updateBookingDto.status && updateBookingDto.status !== booking.status) {
+      this.validateStatusTransition(booking.status, updateBookingDto.status);
+    }
+
     return this.repository.update(id, updateBookingDto);
+  }
+
+  private validateStatusTransition(current: BookingStatus, next: BookingStatus) {
+    if (current === next) return;
+
+    if (current === BookingStatus.COMPLETED || current === BookingStatus.CANCELLED) {
+      throw new BadRequestException(`Cannot change status from terminal state: ${current}`);
+    }
+
+    const allowed: Record<BookingStatus, BookingStatus[]> = {
+      [BookingStatus.PENDING]: [BookingStatus.CONFIRMED, BookingStatus.CANCELLED],
+      [BookingStatus.CONFIRMED]: [BookingStatus.IN_PROGRESS, BookingStatus.COMPLETED, BookingStatus.CANCELLED],
+      [BookingStatus.IN_PROGRESS]: [BookingStatus.COMPLETED, BookingStatus.CANCELLED],
+      [BookingStatus.COMPLETED]: [],
+      [BookingStatus.CANCELLED]: [],
+      [BookingStatus.NO_SHOW]: [],
+    };
+
+    if (!allowed[current]?.includes(next)) {
+      throw new BadRequestException(`Status transition from ${current} to ${next} is not allowed.`);
+    }
   }
 
   async cancel(id: string, user: { userId: string; role: string }) {
