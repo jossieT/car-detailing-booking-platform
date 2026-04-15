@@ -41,6 +41,11 @@ export class UsersService {
 
   async findAll() {
     return await this.prisma.user.findMany({
+      where: {
+        role: {
+          in: [UserRole.STAFF, UserRole.ADMIN, UserRole.OWNER, UserRole.MANAGER],
+        },
+      },
       select: {
         id: true,
         email: true,

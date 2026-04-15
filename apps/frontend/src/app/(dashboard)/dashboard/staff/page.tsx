@@ -370,14 +370,16 @@ export default function StaffPage() {
                       <button
                         onClick={() => openEditModal(member)}
                         className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
+                        title="Edit Staff Member"
                       >
-                        <Pencil size={16} /> Edit
+                        <Pencil size={18} />
                       </button>
                       <button
                         onClick={() => confirmDelete(member)}
                         className="text-red-400 hover:text-red-300 inline-flex items-center gap-1"
+                        title="Delete Staff Member"
                       >
-                        <Trash2 size={16} /> Delete
+                        <Trash2 size={18} />
                       </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
