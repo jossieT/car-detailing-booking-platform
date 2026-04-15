@@ -288,6 +288,54 @@ export class BookingsService {
     }
   }
 
+  async getAvailableStaffForBooking(bookingId: string, user: { userId: string; role: string }) {
+    const booking = await this.repository.findOne(bookingId);
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const service = await this.prisma.service.findUnique({ where: { id: booking.serviceId } });
+    const bufferMinutes = service?.bufferMinutes ?? 0;
+
+    const freeStaff = await this.repository.findAvailableStaff(
+      booking.startTime,
+      booking.endTime,
+      booking.businessId!,
+      bufferMinutes,
+      bookingId, // exclude this booking itself from the check
+    );
+
+    // Fetch their full details
+    return this.prisma.user.findMany({
+      where: { id: { in: freeStaff.map((s) => s.id) } },
+      select: { id: true, firstName: true, lastName: true, role: true, email: true },
+    });
+  }
+
+  async reassignStaff(bookingId: string, staffId: string, user: { userId: string; role: string }) {
+    const booking = await this.repository.findOne(bookingId);
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const staff = await this.prisma.user.findUnique({ where: { id: staffId } });
+    if (!staff || !staff.isActive) throw new NotFoundException('Staff member not found or inactive');
+
+    const service = await this.prisma.service.findUnique({ where: { id: booking.serviceId } });
+    const bufferMinutes = service?.bufferMinutes ?? 0;
+
+    // Validate the new staff member is actually free
+    const isFree = await this.repository.isStaffFree(
+      staffId,
+      booking.startTime,
+      booking.endTime,
+      booking.businessId!,
+      bufferMinutes,
+      bookingId,
+    );
+    if (!isFree) {
+      throw new BadRequestException(`${staff.firstName} ${staff.lastName} is not available for this time slot.`);
+    }
+
+    return this.repository.update(bookingId, { staff: { connect: { id: staffId } } });
+  }
+
   async cancel(id: string, user: { userId: string; role: string }) {
     const booking = await this.findOne(id, user);
     if (booking.status === BookingStatus.CANCELLED) {

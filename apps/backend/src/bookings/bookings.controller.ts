@@ -80,6 +80,33 @@ export class BookingsController {
   }
 
   /**
+   * Get available staff for a specific booking's time window.
+   * Restricted to Admin, Manager, Owner.
+   */
+  @Get(':id/available-staff')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER)
+  getAvailableStaffForBooking(
+    @Param('id') id: string,
+    @Request() req: any,
+  ) {
+    return this.bookingsService.getAvailableStaffForBooking(id, req.user);
+  }
+
+  /**
+   * Reassign staff for a specific booking.
+   * Restricted to Admin, Manager, Owner.
+   */
+  @Patch(':id/staff')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER)
+  reassignStaff(
+    @Param('id') id: string,
+    @Body() body: { staffId: string },
+    @Request() req: any,
+  ) {
+    return this.bookingsService.reassignStaff(id, body.staffId, req.user);
+  }
+
+  /**
    * Soft delete / cancel a booking.
    */
   @Delete(':id')

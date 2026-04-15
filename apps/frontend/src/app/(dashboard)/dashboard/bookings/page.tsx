@@ -6,6 +6,7 @@ import { bookingService } from '@/services/booking.service';
 import { serviceService } from '@/services/service.service';
 import { businessService } from '@/services/business.service';
 import { apiFetch } from '@/lib/api';
+import { Pencil, Trash2, UserCog } from 'lucide-react';
 import type { Booking } from '@/types/booking';
 import type { Service } from '@/types/service';
 import type { Business } from '@/types/business';
@@ -36,6 +37,11 @@ export default function BookingsPage() {
   const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
   const [statusChangeData, setStatusChangeData] = useState<{ id: string; status: string } | null>(null);
+  const [staffReassignOpen, setStaffReassignOpen] = useState(false);
+  const [reassignBooking, setReassignBooking] = useState<Booking | null>(null);
+  const [availableStaff, setAvailableStaff] = useState<any[]>([]);
+  const [selectedReassignStaffId, setSelectedReassignStaffId] = useState('');
+  const [fetchingAvailableStaff, setFetchingAvailableStaff] = useState(false);
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
@@ -257,6 +263,49 @@ export default function BookingsPage() {
     setDeleteModalOpen(true);
   };
 
+  const openReassignModal = async (booking: Booking) => {
+    setReassignBooking(booking);
+    setSelectedReassignStaffId(booking.staffId || '');
+    setStaffReassignOpen(true);
+    setFetchingAvailableStaff(true);
+    setAvailableStaff([]);
+    try {
+      const res = await apiFetch(`/bookings/${booking.id}/available-staff`);
+      if (!res.ok) throw new Error('Failed to fetch available staff');
+      const data = await res.json();
+      // Also add the current staff member so they can keep them selected
+      const currentIsInList = data.some((s: any) => s.id === booking.staffId);
+      if (booking.staff && !currentIsInList) {
+        setAvailableStaff([booking.staff, ...data]);
+      } else {
+        setAvailableStaff(data);
+      }
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setFetchingAvailableStaff(false);
+    }
+  };
+
+  const handleReassignStaff = async () => {
+    if (!reassignBooking || !selectedReassignStaffId) return;
+    try {
+      const res = await apiFetch(`/bookings/${reassignBooking.id}/staff`, {
+        method: 'PATCH',
+        body: JSON.stringify({ staffId: selectedReassignStaffId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to reassign staff');
+      }
+      showMessage('Staff reassigned successfully', 'success');
+      setStaffReassignOpen(false);
+      fetchBookings();
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       PENDING: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
@@ -363,6 +412,7 @@ export default function BookingsPage() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Customer</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Service</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Staff</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Time</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Amount</th>
@@ -379,6 +429,25 @@ export default function BookingsPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{booking.service.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {booking.staff ? (
+                        <button
+                          onClick={() => openReassignModal(booking)}
+                          className="flex items-center gap-1.5 text-slate-200 hover:text-purple-400 transition group"
+                          title="Reassign staff"
+                        >
+                          <span>{booking.staff.firstName} {booking.staff.lastName}</span>
+                          <UserCog size={14} className="opacity-0 group-hover:opacity-100 transition text-purple-400" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openReassignModal(booking)}
+                          className="text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 rounded-full transition"
+                        >
+                          Unassigned
+                        </button>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatDate(booking.startTime)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatTime(booking.startTime)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-white">${parseFloat(booking.totalPrice).toFixed(2)}</td>
@@ -399,16 +468,26 @@ export default function BookingsPage() {
                       <button
                         onClick={() => openEditModal(booking)}
                         disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
-                        className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                        title="Edit Booking"
                       >
-                        Edit
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => openReassignModal(booking)}
+                        disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
+                        className="text-purple-400 hover:text-purple-300 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                        title="Reassign Staff"
+                      >
+                        <UserCog size={16} />
                       </button>
                       <button
                         onClick={() => confirmDelete(booking)}
                         disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
-                        className="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                        title="Delete Booking"
                       >
-                        Delete
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>
@@ -688,11 +767,73 @@ export default function BookingsPage() {
         </div>
       )}
 
+      {/* Staff Reassignment Modal */}
+      {staffReassignOpen && reassignBooking && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-1">Reassign Staff</h3>
+            <p className="text-sm text-slate-400 mb-5">
+              Booking for <span className="text-white">{reassignBooking.customer.firstName} {reassignBooking.customer.lastName}</span> — {reassignBooking.service.name}
+            </p>
+
+            {fetchingAvailableStaff ? (
+              <div className="text-center py-8 text-slate-400 text-sm">Finding available staff…</div>
+            ) : availableStaff.length === 0 ? (
+              <div className="text-center py-8 text-yellow-400 text-sm bg-yellow-500/5 border border-yellow-500/20 rounded-xl">
+                No staff members are free for this time slot.
+              </div>
+            ) : (
+              <div className="space-y-2 mb-6">
+                {availableStaff.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedReassignStaffId(s.id)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition text-left ${
+                      selectedReassignStaffId === s.id
+                        ? 'bg-purple-600/20 border-purple-500 text-white'
+                        : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:border-purple-500/50'
+                    }`}
+                  >
+                    <div>
+                      <p className="font-medium">{s.firstName} {s.lastName}</p>
+                      <p className="text-xs text-slate-400">{s.role}</p>
+                    </div>
+                    {s.id === reassignBooking.staffId && (
+                      <span className="text-xs bg-slate-700 px-2 py-0.5 rounded-full text-slate-400">Current</span>
+                    )}
+                    {selectedReassignStaffId === s.id && s.id !== reassignBooking.staffId && (
+                      <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/30">Selected</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStaffReassignOpen(false)}
+                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReassignStaff}
+                disabled={!selectedReassignStaffId || selectedReassignStaffId === reassignBooking.staffId || fetchingAvailableStaff}
+                className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Confirm Reassignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {message.text && (
         <div className={`fixed bottom-4 right-4 p-3 rounded-lg ${message.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white shadow-lg z-50`}>
           {message.text}
         </div>
       )}
+
     </div>
   );
 }
