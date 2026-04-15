@@ -196,7 +196,17 @@ export class BookingsRepository {
         ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       },
     });
-    return !overlap;
+
+    const leaveOverlap = await this.prisma.leaveRequest.findFirst({
+      where: {
+        staffId,
+        status: 'APPROVED',
+        startDate: { lt: effectiveEnd },
+        endDate: { gt: effectiveStart },
+      },
+    });
+
+    return !overlap && !leaveOverlap;
   }
 
   /**
@@ -229,12 +239,27 @@ export class BookingsRepository {
       .map((b) => b.staffId)
       .filter((id): id is string => id !== null);
 
+    const staffOnLeave = await this.prisma.leaveRequest.findMany({
+      where: {
+        status: 'APPROVED',
+        startDate: { lt: effectiveEnd },
+        endDate: { gt: effectiveStart },
+      },
+      select: { staffId: true },
+      distinct: ['staffId'],
+    });
+
+    const leaveStaffIds = staffOnLeave.map((l) => l.staffId);
+    
+    // Combine busy and leave IDs
+    const unavailableStaffIds = [...new Set([...busyStaffIds, ...leaveStaffIds])];
+
     return this.prisma.user.findMany({
       where: {
         role: UserRole.STAFF,
         isActive: true,
         businessId,
-        ...(busyStaffIds.length > 0 ? { id: { notIn: busyStaffIds } } : {}),
+        ...(unavailableStaffIds.length > 0 ? { id: { notIn: unavailableStaffIds } } : {}),
       },
       select: { id: true },
     });

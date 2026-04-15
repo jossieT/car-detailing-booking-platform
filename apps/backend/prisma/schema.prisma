@@ -44,6 +44,7 @@ model User {
   staffProfile  StaffProfile?
   skills           Service[]        @relation("StaffSkills")
   workingHours     WorkingHour[]
+  leaveRequests    LeaveRequest[]
   business      Business?      @relation(fields: [businessId], references: [id], onDelete: Restrict)
   refreshTokens RefreshToken[]
 
@@ -242,6 +243,22 @@ model Timesheet {
   @@map("timesheets")
 }
 
+model LeaveRequest {
+  id          String      @id @default(cuid())
+  staffId     String      @map("staff_id")
+  startDate   DateTime    @map("start_date")
+  endDate     DateTime    @map("end_date")
+  status      LeaveStatus @default(PENDING)
+  reason      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  staff       User        @relation(fields: [staffId], references: [id])
+
+  @@index([staffId])
+  @@map("leave_requests")
+}
+
 model Payroll {
   id          String        @id @default(cuid())
   staffId     String        @map("staff_id")
@@ -358,4 +375,10 @@ enum PayrollStatus {
   DRAFT
   PROCESSED
   PAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

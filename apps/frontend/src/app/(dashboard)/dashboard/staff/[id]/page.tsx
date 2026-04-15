@@ -1,81 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
-import {
-  ArrowLeft,
-  Save,
-  Mail,
-  Phone,
-  BadgeCheck,
-  User,
-  Calendar,
-  Clock,
-  Briefcase,
-  CheckCircle,
-  XCircle,
-} from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Calendar, Clock, Edit2, Shield, Settings, Activity } from 'lucide-react';
+import Link from 'next/link';
+import { format } from 'date-fns';
 
-interface StaffDetail {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  role: string;
-  isActive: boolean;
-  skills: { id: string; name: string; basePrice: string }[];
-  createdAt: Date;  
-  workingHours: WorkingHour[];
-}
-
-interface WorkingHour {
-  id?: string;
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  isDayOff: boolean;
-}
-
-interface Service {
-  id: string;
-  name: string;
-  basePrice: string;
-}
-
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-export default function StaffDetailPage() {
-  const { id } = useParams();
+export default function StaffDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = use(paramsPromise);
   const router = useRouter();
-  const [staff, setStaff] = useState<StaffDetail | null>(null);
-  const [allServices, setAllServices] = useState<Service[]>([]);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [staff, setStaff] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'profile' | 'skills' | 'hours'>('profile');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [message, setMessage] = useState({ text: '', type: 'success' });
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+  
+  // Tab states
+  const [skills, setSkills] = useState<any[]>([]);
+  const [workingHours, setWorkingHours] = useState<any[]>([]);
 
   useEffect(() => {
     fetchStaff();
-    fetchServices();
-  }, [id]);
+  }, [params.id]);
 
   const fetchStaff = async () => {
     try {
-
-      const res = await apiFetch(`/users/${id}`);
-      if (!res.ok) throw new Error('Staff not found');
+      setLoading(true);
+      const res = await apiFetch(`/users/${params.id}`);
+      if (!res.ok) throw new Error('Failed to load profile');
       const data = await res.json();
       setStaff(data);
-      setSelectedSkills(data.skills?.map((s: any) => s.id) || []);
+      // Populate tabs from embedded relations
+      if (data.skills) setSkills(data.skills);
       if (data.workingHours) setWorkingHours(data.workingHours);
-      else initWorkingHours();
     } catch (err: any) {
       showMessage(err.message, 'error');
     } finally {
@@ -83,300 +40,158 @@ export default function StaffDetailPage() {
     }
   };
 
-  const fetchServices = async () => {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_BASE}/services`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setAllServices(data);
-  };
-
-  const initWorkingHours = () => {
-    const hours = DAYS.map((_, idx) => ({
-      dayOfWeek: idx,
-      startTime: '09:00',
-      endTime: '17:00',
-      isDayOff: idx === 0 || idx === 6,
-    }));
-    setWorkingHours(hours);
-  };
-
   const showMessage = (text: string, type: 'success' | 'error') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: 'success' }), 3000);
   };
 
-  const saveSkills = async () => {
-    setSaving(true);
-    try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/users/${id}/skills`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ serviceIds: selectedSkills }),
-      });
-      if (!res.ok) throw new Error('Failed to save skills');
-      showMessage('Skills updated', 'success');
-      fetchStaff();
-    } catch (err: any) {
-      showMessage(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveWorkingHours = async () => {
-    setSaving(true);
-    try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`${API_BASE}/users/${id}/working-hours`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ hours: workingHours }),
-      });
-      if (!res.ok) throw new Error('Failed to save working hours');
-      showMessage('Working hours updated', 'success');
-    } catch (err: any) {
-      showMessage(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateWorkingHour = (index: number, field: keyof WorkingHour, value: any) => {
-    const updated = [...workingHours];
-    updated[index] = { ...updated[index], [field]: value };
-    setWorkingHours(updated);
-  };
-
-  if (loading) return <div className="text-white text-center py-12">Loading...</div>;
-  if (!staff) return <div className="text-white text-center py-12">Staff not found.</div>;
-
-  const fullName = `${staff.firstName} ${staff.lastName}`;
-  const avatarInitials = `${staff.firstName[0]}${staff.lastName[0]}`;
+  if (loading) return <div className="text-center text-white py-12">Loading staff profile...</div>;
+  if (!staff) return <div className="text-center text-white py-12">Staff member not found.</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard/staff" className="text-slate-400 hover:text-white">
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className="text-2xl font-bold text-white">{fullName}</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Link href="/dashboard/staff" className="p-2 bg-slate-800 rounded-xl hover:bg-slate-700 transition text-slate-300">
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+              {staff.firstName} {staff.lastName}
+              {!staff.isActive && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                  Inactive
+                </span>
+              )}
+            </h1>
+            <p className="text-sm text-slate-400">Staff Profile</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero Card */}
+      <div className="bg-[#0f172a] border border-slate-800 rounded-3xl p-6 md:p-8 flex items-center gap-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-3xl font-bold text-white shadow-xl">
+          {staff.firstName[0]}{staff.lastName[0]}
+        </div>
+        <div className="flex flex-col z-10">
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="text-2xl font-bold text-white">{staff.firstName} {staff.lastName}</h2>
+            <span className="px-3 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-full border border-purple-500/30 font-medium">
+              {staff.role}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-slate-400 text-sm">
+            <span className="flex items-center gap-1.5"><Mail size={16} /> {staff.email}</span>
+            <span className="flex items-center gap-1.5"><Phone size={16} /> {staff.phone || 'N/A'}</span>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-white/10">
-        <nav className="flex gap-6">
-          {['profile', 'skills', 'hours'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-2 text-sm font-medium transition ${
-                activeTab === tab
-                  ? 'text-purple-400 border-b-2 border-purple-400'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {tab === 'profile'
-                ? 'Profile'
-                : tab === 'skills'
-                ? 'Skills & Services'
-                : 'Working Hours'}
-            </button>
-          ))}
-        </nav>
+      <div className="flex space-x-2 border-b border-white/10 overflow-x-auto scroller-hide pt-2">
+        <button onClick={() => setActiveTab('profile')} className={`px-4 py-3 text-sm font-medium transition whitespace-nowrap outline-none ${activeTab === 'profile' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-400 hover:text-slate-300'}`}>
+          <span className="flex items-center gap-2"><Shield size={16} /> Contact Details</span>
+        </button>
+        <button onClick={() => setActiveTab('skills')} className={`px-4 py-3 text-sm font-medium transition whitespace-nowrap outline-none ${activeTab === 'skills' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-400 hover:text-slate-300'}`}>
+          <span className="flex items-center gap-2"><Settings size={16} /> Skills & Services</span>
+        </button>
+        <button onClick={() => setActiveTab('hours')} className={`px-4 py-3 text-sm font-medium transition whitespace-nowrap outline-none ${activeTab === 'hours' ? 'text-purple-400 border-b-2 border-purple-500' : 'text-slate-400 hover:text-slate-300'}`}>
+          <span className="flex items-center gap-2"><Clock size={16} /> Working Hours</span>
+        </button>
       </div>
 
-      {/* Profile Tab - Enhanced with icons and better layout */}
-      {activeTab === 'profile' && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden">
-          {/* Avatar and header section */}
-          <div className="flex flex-col items-center p-6 border-b border-white/10 bg-white/5">
-            <div className="w-24 h-24 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg mb-3">
-              <span className="text-3xl font-bold text-white">{avatarInitials}</span>
-            </div>
-            <h2 className="text-xl font-semibold text-white">{fullName}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span
-                className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                  staff.role === 'ADMIN'
-                    ? 'bg-red-500/20 text-red-300'
-                    : staff.role === 'MANAGER'
-                    ? 'bg-blue-500/20 text-blue-300'
-                    : 'bg-purple-500/20 text-purple-300'
-                }`}
-              >
-                {staff.role}
-              </span>
-              <div className="flex items-center gap-1">
-                {staff.isActive ? (
-                  <CheckCircle size={14} className="text-emerald-400" />
-                ) : (
-                  <XCircle size={14} className="text-red-400" />
-                )}
-                <span
-                  className={`text-xs font-medium ${
-                    staff.isActive ? 'text-emerald-400' : 'text-red-400'
-                  }`}
-                >
-                  {staff.isActive ? 'Active' : 'Inactive'}
-                </span>
+      {/* Tab Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Detail Body Area */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {activeTab === 'profile' && (
+            <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2"><Activity size={18} className="text-purple-400"/> Employment Details</h3>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Status</p>
+                  <p className="text-sm font-medium text-white">{staff.isActive ? 'Active Member' : 'Inactive / Suspended'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Role Configuration</p>
+                  <p className="text-sm font-medium text-white uppercase">{staff.role}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Member Since</p>
+                  <p className="text-sm font-medium text-white">{format(new Date(staff.createdAt), 'MMMM dd, yyyy')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Last Updated</p>
+                  <p className="text-sm font-medium text-white">{format(new Date(staff.updatedAt), 'MMMM dd, yyyy')}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Contact details */}
-          <div className="p-6 space-y-5">
-            <div className="flex items-center gap-3 text-slate-300">
-              <div className="w-8 h-8 rounded-full bg-slate-800/50 flex items-center justify-center">
-                <Mail size={16} className="text-purple-400" />
+          {activeTab === 'skills' && (
+            <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-white">Assigned Services</h3>
+                <button className="text-sm text-purple-400 flex items-center gap-1 hover:underline"><Edit2 size={14}/> Manage</button>
               </div>
-              <div>
-                <p className="text-xs text-slate-400">Email Address</p>
-                <p className="text-sm text-white">{staff.email}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 text-slate-300">
-              <div className="w-8 h-8 rounded-full bg-slate-800/50 flex items-center justify-center">
-                <Phone size={16} className="text-purple-400" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Phone Number</p>
-                <p className="text-sm text-white">{staff.phone || 'Not provided'}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 text-slate-300">
-              <div className="w-8 h-8 rounded-full bg-slate-800/50 flex items-center justify-center">
-                <Calendar size={16} className="text-purple-400" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Member Since</p>
-                <p className="text-sm text-white">
-                  {new Date(staff.createdAt).toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 text-slate-300">
-              <div className="w-8 h-8 rounded-full bg-slate-800/50 flex items-center justify-center">
-                <BadgeCheck size={16} className="text-purple-400" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Staff ID</p>
-                <p className="text-sm text-white font-mono">{staff.id.slice(0, 12)}...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Skills Tab - unchanged */}
-      {activeTab === 'skills' && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Assigned Services</h3>
-          <div className="space-y-3">
-            {allServices.map((service) => (
-              <label key={service.id} className="flex items-center gap-3 text-white">
-                <input
-                  type="checkbox"
-                  checked={selectedSkills.includes(service.id)}
-                  onChange={(e) => {
-                    if (e.target.checked)
-                      setSelectedSkills([...selectedSkills, service.id]);
-                    else
-                      setSelectedSkills(selectedSkills.filter((id) => id !== service.id));
-                  }}
-                  className="w-4 h-4 accent-purple-500"
-                />
-                <span>
-                  {service.name} - ${parseFloat(service.basePrice).toFixed(2)}
-                </span>
-              </label>
-            ))}
-          </div>
-          <button
-            onClick={saveSkills}
-            disabled={saving}
-            className="mt-6 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2"
-          >
-            <Save size={16} /> {saving ? 'Saving...' : 'Save Skills'}
-          </button>
-        </div>
-      )}
-
-      {/* Working Hours Tab - unchanged */}
-      {activeTab === 'hours' && (
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Weekly Schedule</h3>
-          <div className="space-y-3">
-            {workingHours.map((hour, idx) => (
-              <div
-                key={hour.dayOfWeek}
-                className="flex flex-wrap items-center gap-3 p-2 border-b border-white/10"
-              >
-                <div className="w-24 text-white font-medium">{DAYS[hour.dayOfWeek]}</div>
-                <label className="flex items-center gap-2 text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={hour.isDayOff}
-                    onChange={(e) => updateWorkingHour(idx, 'isDayOff', e.target.checked)}
-                    className="w-4 h-4 accent-red-500"
-                  />
-                  Day off
-                </label>
-                {!hour.isDayOff && (
-                  <>
-                    <input
-                      type="time"
-                      value={hour.startTime}
-                      onChange={(e) => updateWorkingHour(idx, 'startTime', e.target.value)}
-                      className="px-2 py-1 bg-slate-800/50 border border-slate-700 rounded text-white text-sm"
-                    />
-                    <span className="text-slate-400">to</span>
-                    <input
-                      type="time"
-                      value={hour.endTime}
-                      onChange={(e) => updateWorkingHour(idx, 'endTime', e.target.value)}
-                      className="px-2 py-1 bg-slate-800/50 border border-slate-700 rounded text-white text-sm"
-                    />
-                  </>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {skills.length > 0 ? skills.map((skill, i) => (
+                  <div key={i} className="bg-slate-800/50 rounded-xl p-3 border border-slate-700 text-sm text-slate-200">
+                    {skill.name}
+                  </div>
+                )) : (
+                  <div className="col-span-full py-8 text-center text-slate-500 text-sm bg-slate-900/50 rounded-xl border border-dashed border-slate-800">
+                    No services formally assigned into skill matrix yet.
+                  </div>
                 )}
               </div>
-            ))}
-          </div>
-          <button
-            onClick={saveWorkingHours}
-            disabled={saving}
-            className="mt-6 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2"
-          >
-            <Save size={16} /> {saving ? 'Saving...' : 'Save Schedule'}
-          </button>
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Toast message */}
-      {message.text && (
-        <div
-          className={`fixed bottom-4 right-4 p-3 rounded-lg ${
-            message.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          } text-white shadow-lg z-50`}
-        >
-          {message.text}
+          {activeTab === 'hours' && (
+            <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-white">Weekly Schedule Limit</h3>
+                <button className="text-sm text-purple-400 flex items-center gap-1 hover:underline"><Edit2 size={14}/> Edit Schedule</button>
+              </div>
+              {workingHours.length > 0 ? (
+                <div className="space-y-3">
+                  {workingHours.map((wh) => (
+                    <div key={wh.id} className={`flex justify-between p-4 rounded-xl border ${wh.isDayOff ? 'bg-red-500/5 border-red-500/10' : 'bg-slate-800/50 border-slate-700'}`}>
+                      <span className={`font-medium ${wh.isDayOff ? 'text-slate-500' : 'text-white'}`}>
+                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wh.dayOfWeek]}
+                      </span>
+                      <span className={`text-sm ${wh.isDayOff ? 'text-red-400' : 'text-slate-300'}`}>
+                        {wh.isDayOff ? 'Day Off' : `${wh.startTime} - ${wh.endTime}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center text-slate-500 text-sm bg-slate-900/50 rounded-xl border border-dashed border-slate-800">
+                  No standard working hours defined. Default business hours likely apply.
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
-      )}
+        
+        {/* Context Sidebar */}
+        <div className="space-y-6">
+          <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-5">
+             <h4 className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2"><Calendar size={16}/> Upcoming Schedule</h4>
+             <p className="text-xs text-slate-400 mb-4">You can view upcoming bookings specifically assigned to this profile under the Bookings tab on the main nav.</p>
+             <Link href="/dashboard/bookings" className="block text-center text-xs font-semibold py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition shadow">
+               Go to Bookings
+             </Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -100,6 +100,12 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        skills: {
+          select: { id: true, name: true },
+        },
+        workingHours: {
+          orderBy: { dayOfWeek: 'asc' },
+        },
         bookings: {
           include: {
             service: true,

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { bookingService } from '@/services/booking.service';
 import { serviceService } from '@/services/service.service';
 import { businessService } from '@/services/business.service';
+import { apiFetch } from '@/lib/api';
 import type { Booking } from '@/types/booking';
 import type { Service } from '@/types/service';
 import type { Business } from '@/types/business';
@@ -23,8 +24,10 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
-  const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [selectedBusinessId, setSelectedBusinessId] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState('');
@@ -64,12 +67,15 @@ export default function BookingsPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [servicesData, businessesData] = await Promise.all([
+      const [servicesData, businessesData, staffRes] = await Promise.all([
         serviceService.getAll(),
         businessService.getAll(),
+        apiFetch('/users'),
       ]);
       setServices(servicesData);
       setBusinesses(businessesData);
+      const resData = await staffRes.json();
+      setStaffList(resData || []);
       if (businessesData.length === 1) setSelectedBusinessId(businessesData[0].id);
       if (servicesData.length > 0) setSelectedServiceId(servicesData[0].id);
     } catch (err: any) {
@@ -130,6 +136,7 @@ export default function BookingsPage() {
     setSelectedDate('');
     setSlots([]);
     setSelectedSlot('');
+    setSelectedStaffId('');
     setFormData({
       customerName: '',
       customerEmail: '',
@@ -157,6 +164,7 @@ export default function BookingsPage() {
     setSelectedServiceId(booking.serviceId);
     setSelectedDate(dateStr);
     setSelectedSlot(booking.startTime);
+    setSelectedStaffId(booking.staffId || '');
     setFormData({
       customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
       customerEmail: booking.customer.email,
@@ -185,6 +193,7 @@ export default function BookingsPage() {
       customerPhone: formData.customerPhone || undefined,
       serviceId: selectedServiceId,
       businessId: selectedBusinessId,
+      staffId: editingBooking ? selectedStaffId : undefined, // Only inject manual override on edits
       startTime: selectedSlot,
       vehicleInfo: {
         make: formData.vehicleMake,
@@ -499,6 +508,28 @@ export default function BookingsPage() {
                     <div className="text-sm text-slate-400 mt-1">Click "Check Slots" to see available times</div>
                   )}
                 </div>
+
+                {editingBooking && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Assigned Staff (Manual Reassignment)
+                    </label>
+                    <select
+                      value={selectedStaffId}
+                      onChange={(e) => setSelectedStaffId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    >
+                      <option value="">Auto-Assign (Based on availability)</option>
+                      {staffList.map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.firstName} {staff.lastName}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-400 mt-1">Leave empty to auto-assign the best available staff.</p>
+                  </div>
+                )}
+
 
                 {/* Customer Information section */}
                 <div className="border-t border-white/10 pt-4">

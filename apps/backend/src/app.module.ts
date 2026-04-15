@@ -10,6 +10,8 @@ import { BookingsModule } from './bookings/bookings.module';
 import { ServicesModule } from './services/services.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { HrModule } from './hr/hr.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ServicesModule,
     BusinessesModule,
     DashboardModule,
+    HrModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
