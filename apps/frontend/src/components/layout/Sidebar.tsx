@@ -29,7 +29,7 @@ export default function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
       } transition-all duration-300 ease-in-out bg-white/5 backdrop-blur-lg border-r border-white/10 flex flex-col flex-shrink-0 relative group`}
     >
       {/* Logo & Toggle */}
-      <div className="flex items-center justify-between px-6 py-3 h-14 border-b border-white/10">
+      <div className="flex items-center justify-between px-6 py-3 h-14">
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
             <div className="w-8 h-8 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg">
