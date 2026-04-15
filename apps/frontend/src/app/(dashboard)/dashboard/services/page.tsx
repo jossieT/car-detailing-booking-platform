@@ -6,19 +6,14 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Trash2, Eye, Plus, Search, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
-interface Service {
-  id: string;
+interface ServiceFormData {
   name: string;
-  description: string | null;
+  description: string;
   duration: number;
-  basePrice: string | number;
+  basePrice: number;
   isActive: boolean;
-  imageUrl: string | null;
   bufferMinutes: number;
   capacity: number;
-  businessId: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export default function ServicesPage() {
@@ -31,6 +26,18 @@ export default function ServicesPage() {
     minPrice: '',
     maxPrice: '',
   });
+
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [formData, setFormData] = useState<ServiceFormData>({
+    name: '',
+    description: '',
+    duration: 60,
+    basePrice: 0,
+    isActive: true,
+    bufferMinutes: 30,
+    capacity: 1,
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 
@@ -123,17 +130,62 @@ export default function ServicesPage() {
     return `$${num.toFixed(2)}`;
   };
 
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const businessId = user?.businessId;
+
+      if (!businessId) {
+        throw new Error('Business ID not found. Please log in again.');
+      }
+
+      const res = await apiFetch('/services', {
+        method: 'POST',
+        body: JSON.stringify({ ...formData, businessId }),
+      });
+      if (!res.ok) throw new Error('Creation failed');
+      showMessage('Service created successfully', 'success');
+      setAddModalOpen(false);
+      setFormData({
+        name: '',
+        description: '',
+        duration: 60,
+        basePrice: 0,
+        isActive: true,
+        bufferMinutes: 30,
+        capacity: 1,
+      });
+      fetchServices();
+    } catch (err: any) {
+      showMessage(err.message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : type === 'number' ? parseFloat(value) : value,
+    }));
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">Manage Services</h2>
-        <Link
-          href="/dashboard/services/new"
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition flex items-center gap-2"
+        <button
+          onClick={() => setAddModalOpen(true)}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition flex items-center gap-2 shadow-lg"
         >
           <Plus size={18} /> Add Service
-        </Link>
+        </button>
       </div>
 
       {/* Filters */}
@@ -212,7 +264,6 @@ export default function ServicesPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Duration</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -243,30 +294,129 @@ export default function ServicesPage() {
                         {service.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                      <Link
-                        href={`/dashboard/services/${service.id}`}
-                        className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
-                      >
-                        <Eye size={16} /> View
-                      </Link>
-                      <Link
-                        href={`/dashboard/services/${service.id}/edit`}
-                        className="text-yellow-400 hover:text-yellow-300 inline-flex items-center gap-1"
-                      >
-                        <Pencil size={16} /> Edit
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(service.id)}
-                        className="text-red-400 hover:text-red-300 inline-flex items-center gap-1"
-                      >
-                        <Trash2 size={16} /> Delete
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {addModalOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-white/10 shadow-2xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-white">Add New Service</h2>
+                <button
+                  onClick={() => setAddModalOpen(false)}
+                  className="text-slate-400 hover:text-white transition"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <form onSubmit={handleAddSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Service Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleFormChange}
+                    required
+                    placeholder="e.g. Premium Hand Wash"
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleFormChange}
+                    rows={3}
+                    placeholder="Describe what this service includes..."
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Duration (minutes) *</label>
+                    <input
+                      type="number"
+                      name="duration"
+                      value={formData.duration}
+                      onChange={handleFormChange}
+                      required
+                      min={1}
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Base Price ($) *</label>
+                    <input
+                      type="number"
+                      name="basePrice"
+                      value={formData.basePrice}
+                      onChange={handleFormChange}
+                      required
+                      min={0}
+                      step={0.01}
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Buffer Minutes</label>
+                    <input
+                      type="number"
+                      name="bufferMinutes"
+                      value={formData.bufferMinutes}
+                      onChange={handleFormChange}
+                      min={0}
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Capacity</label>
+                    <input
+                      type="number"
+                      name="capacity"
+                      value={formData.capacity}
+                      onChange={handleFormChange}
+                      min={1}
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="isActive"
+                    checked={formData.isActive}
+                    onChange={handleFormChange}
+                    className="w-4 h-4 accent-purple-500"
+                  />
+                  <label className="text-sm text-slate-300">Active (visible to customers)</label>
+                </div>
+                <div className="flex justify-end gap-3 pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setAddModalOpen(false)}
+                    className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition font-medium disabled:opacity-50 shadow-lg shadow-purple-500/20"
+                  >
+                    {submitting ? 'Creating...' : 'Create Service'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

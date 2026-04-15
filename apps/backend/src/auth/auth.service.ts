@@ -134,7 +134,7 @@ async signup(dto: SignupDto) {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, email: user.email, role: user.role, businessId: user.businessId };
     const access_token: string = this.jwtService.sign(payload);
 
     // Generate refresh token
@@ -171,7 +171,7 @@ async signup(dto: SignupDto) {
     }
 
     // Generate new access token
-    const payload = { sub: tokenRecord.user.id, email: tokenRecord.user.email, role: tokenRecord.user.role };
+    const payload = { sub: tokenRecord.user.id, email: tokenRecord.user.email, role: tokenRecord.user.role, businessId: tokenRecord.user.businessId };
     const access_token = this.jwtService.sign(payload);
 
     // Optionally rotate refresh token

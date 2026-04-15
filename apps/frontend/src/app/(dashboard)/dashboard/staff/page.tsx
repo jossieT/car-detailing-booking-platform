@@ -24,6 +24,8 @@ export default function StaffPage() {
   const [filteredStaff, setFilteredStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<Staff | null>(null);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -181,8 +183,9 @@ export default function StaffPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this staff member?')) return;
+  const handleDelete = async () => {
+    if (!memberToDelete) return;
+    const id = memberToDelete.id;
     const token = localStorage.getItem('accessToken');
     try {
       const res = await fetch(`${API_BASE}/users/${id}`, {
@@ -191,10 +194,18 @@ export default function StaffPage() {
       });
       if (!res.ok) throw new Error('Delete failed');
       showMessage('Staff deleted', 'success');
+      setDeleteModalOpen(false);
+      setMemberToDelete(null);
       fetchStaff();
     } catch (err: any) {
       showMessage(err.message, 'error');
+      setDeleteModalOpen(false);
     }
+  };
+
+  const confirmDelete = (member: Staff) => {
+    setMemberToDelete(member);
+    setDeleteModalOpen(true);
   };
 
   const toggleActiveStatus = async (id: string, currentStatus: boolean) => {
@@ -363,7 +374,7 @@ export default function StaffPage() {
                         <Pencil size={16} /> Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(member.id)}
+                        onClick={() => confirmDelete(member)}
                         className="text-red-400 hover:text-red-300 inline-flex items-center gap-1"
                       >
                         <Trash2 size={16} /> Delete
@@ -471,6 +482,39 @@ export default function StaffPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && memberToDelete && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center justify-center w-12 h-12 bg-red-500/20 rounded-full mb-4 mx-auto">
+              <Trash2 className="text-red-500" size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white text-center mb-2">Remove Staff Member</h3>
+            <p className="text-slate-400 text-center mb-6">
+              Are you sure you want to remove <span className="text-white font-semibold">{memberToDelete.firstName} {memberToDelete.lastName}</span>? 
+              This will revoke their access and remove their profile.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setMemberToDelete(null);
+                }}
+                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition font-medium"
+              >
+                Confirm Delete
+              </button>
             </div>
           </div>
         </div>

@@ -54,6 +54,8 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [targetStatus, setTargetStatus] = useState<string | null>(null);
   const [message, setMessage] = useState({ text: '', type: 'success' });
 
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
@@ -84,8 +86,9 @@ export default function BookingDetailPage() {
     setTimeout(() => setMessage({ text: '', type: 'success' }), 3000);
   };
 
-  const updateStatus = async (newStatus: string) => {
-    if (!confirm(`Change status to ${newStatus}?`)) return;
+  const handleStatusUpdate = async () => {
+    if (!targetStatus) return;
+    const newStatus = targetStatus;
     setUpdating(true);
     try {
       const res = await apiFetch(`/bookings/${id}/status`, {
@@ -97,12 +100,20 @@ export default function BookingDetailPage() {
         throw new Error(error.message || 'Status update failed');
       }
       showMessage(`Status updated to ${newStatus}`, 'success');
+      setStatusConfirmOpen(false);
+      setTargetStatus(null);
       fetchBooking();
     } catch (err: any) {
       showMessage(err.message, 'error');
+      setStatusConfirmOpen(false);
     } finally {
       setUpdating(false);
     }
+  };
+
+  const updateStatus = (newStatus: string) => {
+    setTargetStatus(newStatus);
+    setStatusConfirmOpen(true);
   };
 
   const formatDateTime = (isoString: string) => {
@@ -316,6 +327,36 @@ export default function BookingDetailPage() {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-5">
           <h3 className="text-lg font-semibold text-white mb-2">Notes</h3>
           <p className="text-slate-300 whitespace-pre-wrap">{booking.notes}</p>
+        </div>
+      )}
+
+      {/* Status Change Confirmation Modal */}
+      {statusConfirmOpen && targetStatus && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white text-center mb-2">Update Booking Status</h3>
+            <p className="text-slate-400 text-center mb-6">
+              Are you sure you want to change the booking status to <span className={`font-semibold ${getStatusBadge(targetStatus)} px-2 py-0.5 rounded text-xs`}>{targetStatus}</span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setStatusConfirmOpen(false);
+                  setTargetStatus(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStatusUpdate}
+                disabled={updating}
+                className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition font-medium disabled:opacity-50"
+              >
+                {updating ? 'Updating...' : 'Confirm Update'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

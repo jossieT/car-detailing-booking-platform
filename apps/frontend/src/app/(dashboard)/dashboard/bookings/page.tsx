@@ -29,6 +29,10 @@ export default function BookingsPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState('');
   const [fetchingSlots, setFetchingSlots] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
+  const [statusChangeData, setStatusChangeData] = useState<{ id: string; status: string } | null>(null);
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
@@ -206,25 +210,42 @@ export default function BookingsPage() {
     }
   };
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleStatusChange = async () => {
+    if (!statusChangeData) return;
     try {
-      await bookingService.updateStatus(id, newStatus);
+      await bookingService.updateStatus(statusChangeData.id, statusChangeData.status);
       showMessage('Status updated', 'success');
+      setStatusConfirmOpen(false);
+      setStatusChangeData(null);
       fetchBookings();
     } catch (err: any) {
       showMessage(err.message, 'error');
+      setStatusConfirmOpen(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this booking?')) return;
+  const confirmStatusChange = (id: string, newStatus: string) => {
+    setStatusChangeData({ id, status: newStatus });
+    setStatusConfirmOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!bookingToDelete) return;
     try {
-      await bookingService.delete(id);
+      await bookingService.delete(bookingToDelete.id);
       showMessage('Booking deleted', 'success');
+      setDeleteModalOpen(false);
+      setBookingToDelete(null);
       fetchBookings();
     } catch (err: any) {
       showMessage(err.message, 'error');
+      setDeleteModalOpen(false);
     }
+  };
+
+  const confirmDelete = (booking: Booking) => {
+    setBookingToDelete(booking);
+    setDeleteModalOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -355,9 +376,9 @@ export default function BookingsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <select
                         value={booking.status}
-                        onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                        onChange={(e) => confirmStatusChange(booking.id, e.target.value)}
                         disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
-                        className={`px-2 py-1 text-xs rounded-full border ${getStatusBadge(booking.status)} bg-transparent disabled:opacity-50`}
+                        className={`px-2 py-1 text-xs rounded-full border ${getStatusBadge(booking.status)} bg-slate-900 disabled:opacity-50`}
                       >
                         <option value="PENDING">Pending</option>
                         <option value="CONFIRMED">Confirmed</option>
@@ -374,7 +395,7 @@ export default function BookingsPage() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(booking.id)}
+                        onClick={() => confirmDelete(booking)}
                         disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
                         className="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed"
                       >
@@ -569,6 +590,68 @@ export default function BookingsPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && bookingToDelete && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center justify-center w-12 h-12 bg-red-500/20 rounded-full mb-4 mx-auto">
+              <Trash2 className="text-red-500" size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white text-center mb-2">Cancel & Delete Booking</h3>
+            <p className="text-slate-400 text-center mb-6">
+              Are you sure you want to delete the booking for <span className="text-white font-semibold">{bookingToDelete.customer.firstName}</span>? 
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setBookingToDelete(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition font-medium"
+              >
+                Delete Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Change Confirmation Modal */}
+      {statusConfirmOpen && statusChangeData && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white text-center mb-2">Update Booking Status</h3>
+            <p className="text-slate-400 text-center mb-6">
+              Change status to <span className={`font-semibold ${getStatusBadge(statusChangeData.status)} px-2 py-0.5 rounded text-xs`}>{statusChangeData.status}</span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setStatusConfirmOpen(false);
+                  setStatusChangeData(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStatusChange}
+                className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition font-medium"
+              >
+                Update Status
+              </button>
             </div>
           </div>
         </div>

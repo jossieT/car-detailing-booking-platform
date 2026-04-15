@@ -8,7 +8,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { WorkingHourDto } from './dto/set-working-hours.dto';
 import { AssignSkillsDto } from './dto/assign-skills.dto';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -52,6 +52,32 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+      },
+    });
+  }
+
+  async findManyByRole(role: UserRole) {
+    return await this.prisma.user.findMany({
+      where: { role },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        bookings: {
+          select: {
+            id: true,
+            startTime: true,
+            totalPrice: true,
+            status: true,
+            service: { select: { name: true } },
+          },
+        },
       },
     });
   }
@@ -110,6 +136,7 @@ export class UsersService {
         phone: true,
         passwordHash: true,
         role: true,
+        businessId: true,
         isActive: true,
       },
     });
