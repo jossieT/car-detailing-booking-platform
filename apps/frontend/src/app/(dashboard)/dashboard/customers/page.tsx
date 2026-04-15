@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { Eye, Edit, Trash2, Plus, Search, X, UserCheck, UserX } from 'lucide-react';
 
@@ -193,7 +194,11 @@ export default function CustomersPage() {
                   const totalSpent = customer.bookings?.reduce((sum, b) => sum + parseFloat(b.totalPrice || '0'), 0) || 0;
                   return (
                     <tr key={customer.id} className="hover:bg-white/5 transition">
-                      <td className="px-6 py-4 text-sm text-white font-medium">{customer.firstName} {customer.lastName}</td>
+                      <td className="px-6 py-4 text-sm text-white font-medium">
+                        <Link href={`/dashboard/customers/${customer.id}`} className="hover:text-blue-400 hover:underline transition">
+                          {customer.firstName} {customer.lastName}
+                        </Link>
+                      </td>
                       <td className="px-6 py-4 text-sm text-slate-300">{customer.email}</td>
                       <td className="px-6 py-4 text-sm text-slate-300">{customer.phone || '—'}</td>
                       <td className="px-6 py-4 text-sm text-white">${totalSpent.toFixed(2)}</td>

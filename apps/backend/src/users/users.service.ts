@@ -95,6 +95,14 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        bookings: {
+          include: {
+            service: true,
+          },
+          orderBy: {
+            startTime: 'desc',
+          },
+        },
       },
     });
 
